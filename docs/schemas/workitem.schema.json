@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/workitem.schema.json",
+  "title": "WorkItem",
+  "type": "object",
+  "required": ["id", "title", "description", "url"],
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "url": { "type": "string", "format": "uri" },
+    "kind": { "type": "string" },
+    "attributes": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}

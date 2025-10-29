@@ -1,0 +1,30 @@
+[
+  {
+    "id": "repo:github:org/repo1",
+    "title": "repo1",
+    "description": "核心服务",
+    "url": "https://github.com/org/repo1",
+    "kind": "code",
+    "attributes": {
+      "provider": "github",
+      "repo": "org/repo1",
+      "defaultBranch": "main",
+      "visibility": "private",
+      "updatedAt": "2025-10-29T10:00:00Z"
+    }
+  },
+  {
+    "id": "repo:github:org/repo2",
+    "title": "repo2",
+    "description": "前端组件库",
+    "url": "https://github.com/org/repo2",
+    "kind": "code",
+    "attributes": {
+      "provider": "github",
+      "repo": "org/repo2",
+      "defaultBranch": "develop",
+      "visibility": "public",
+      "updatedAt": "2025-10-28T08:30:00Z"
+    }
+  }
+]
