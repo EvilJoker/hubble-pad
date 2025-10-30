@@ -1,7 +1,7 @@
 [
   {
     "id": "repo:github:org/repo1",
-    "title": "repo1",
+    "title": "repo12",
     "description": "核心服务",
     "url": "https://github.com/org/repo1",
     "kind": "code",
@@ -15,7 +15,7 @@
   },
   {
     "id": "repo:github:org/repo2",
-    "title": "repo2",
+    "title": "repo3",
     "description": "前端组件库",
     "url": "https://github.com/org/repo2",
     "kind": "code",

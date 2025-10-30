@@ -9,8 +9,10 @@
 - M3: 多 kind 演练(environment 占位)、渲染器注册表、文档与 RFC 完整化
 
 ## 待办清单
-- [ ] Vue + Tailwind CSS + shadcn + 集成图标（Uno Icons，lucide 源）+ 页面骨架
-- [ ] 列表渲染与本地过滤/排序
+- [x] Vue + Tailwind CSS + shadcn + 集成图标（Uno Icons，lucide 源）+ 页面骨架
+- [x] 列表渲染与本地过滤/排序
+- [x] 开发环境 /data 映射 与 /__data/save 写入
+- [x] 编辑数据弹窗（全量/条目级）+ 本地 JSON 校验与错误提示
 - [ ] GitHub 钩子脚本输出统一 JSON
 - [ ] 写入日志与失败回滚策略
 - [ ] kind 渲染兜底与注册表
@@ -23,3 +25,4 @@
 ## 变更记录
 - 2025-10-29: 初始版本
 - 2025-10-30: 前端技术栈调整为 Vue + Tailwind CSS + shadcn-vue；后续任务按新栈实施。
+- 2025-10-30: 完成 M1 UI 能力（页面骨架、搜索/排序、空态/错误）；集成 Tooltip；新增“编辑数据”弹窗与条目级编辑，保存走 dev 中间件。
