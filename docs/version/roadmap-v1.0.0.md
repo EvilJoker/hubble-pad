@@ -5,7 +5,7 @@
 
 ## 里程碑
 - M1: 前端骨架、读取 /data/workitems.json、搜索与排序、空态与错误文案
-- M2: GitHub 钩子脚本、并发写入策略(最后写入者覆盖)、可选自动感知重载、收藏
+- M2: GitHub 钩子脚本、并发写入策略(最后写入者覆盖)
 - M3: 多 kind 演练(environment 占位)、渲染器注册表、文档与 RFC 完整化
 
 ## 待办清单
@@ -13,9 +13,10 @@
 - [x] 列表渲染与本地过滤/排序
 - [x] 开发环境 /data 映射 与 /__data/save 写入
 - [x] 编辑数据弹窗（全量/条目级）+ 本地 JSON 校验与错误提示
-- [ ] GitHub 钩子脚本输出统一 JSON
-- [ ] 写入日志与失败回滚策略
+- [x] RFC-002 Hooks 开发中间件与 API（/__hooks/list、/__hooks/run/{index}、/__hooks/run-all、/__hooks/save）
 - [ ] kind 渲染兜底与注册表
+- [ ] 增加日志组件，支持输出到日志与 console，并优化现有日志打印以改善维测
+
 
 ## 风险与应对
 - 字段扩散 → 保持最小字段( id/title/description/url )，差异入 attributes

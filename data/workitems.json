@@ -1,7 +1,7 @@
 [
   {
     "id": "repo:github:org/repo1",
-    "title": "repo12",
+    "title": "repo10",
     "description": "核心服务",
     "url": "https://github.com/org/repo1",
     "kind": "code",
@@ -15,7 +15,7 @@
   },
   {
     "id": "repo:github:org/repo2",
-    "title": "repo3",
+    "title": "repo5",
     "description": "前端组件库",
     "url": "https://github.com/org/repo2",
     "kind": "code",
@@ -26,5 +26,41 @@
       "visibility": "public",
       "updatedAt": "2025-10-28T08:30:00Z"
     }
+  },
+  {
+    "id": "repo8",
+    "title": "repo8",
+    "description": "核心服务",
+    "url": "https://example.com/repo1",
+    "kind": "code",
+    "source": "hook:github-repos1",
+    "updatedAt": "2025-10-31T08:32:07.110Z"
+  },
+  {
+    "id": "repo2",
+    "title": "repo2",
+    "description": "组件库",
+    "url": "https://example.com/repo2",
+    "kind": "code",
+    "source": "hook:github-repos1",
+    "updatedAt": "2025-10-31T09:28:06.929Z"
+  },
+  {
+    "id": "repo9",
+    "title": "repo9",
+    "description": "核心服务",
+    "url": "https://example.com/repo1",
+    "kind": "code",
+    "source": "hook:github-repos1",
+    "updatedAt": "2025-10-31T08:33:23.847Z"
+  },
+  {
+    "id": "repo1",
+    "title": "repo1",
+    "description": "核心服务",
+    "url": "https://example.com/repo1",
+    "kind": "code",
+    "source": "hook:github-repos1",
+    "updatedAt": "2025-10-31T09:28:06.929Z"
   }
 ]

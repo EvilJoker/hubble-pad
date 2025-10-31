@@ -1,0 +1,20 @@
+[
+  {
+    "name": "github-repos1",
+    "desc": "示例：拉取 GitHub 组织仓库并输出 WorkItem[]",
+    "cmd": "bash data/hook/github_repo1.sh",
+    "cwd": "./",
+    "enabled": true,
+    "lastRunAt": "2025-10-31T09:28:06.929Z",
+    "lastError": null
+  },
+  {
+    "name": "github-repos2",
+    "desc": "示例：拉取 GitHub 组织仓库并输出 WorkItem[]",
+    "cmd": "bash data/hook/github_repo2.sh",
+    "cwd": "./",
+    "enabled": true,
+    "lastRunAt": "2025-10-31T09:28:06.932Z",
+    "lastError": "模拟失败: 拉取仓库出错"
+  }
+]
