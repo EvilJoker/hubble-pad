@@ -62,5 +62,34 @@
     "kind": "code",
     "source": "hook:github-repos1",
     "updatedAt": "2025-10-31T09:28:06.929Z"
+  },
+  {
+    "id": "jira:JIRA-123",
+    "title": "JIRA-123 登录异常修复",
+    "description": "修复登录流程中的重定向错误",
+    "url": "https://jira.example.com/browse/JIRA-123",
+    "kind": "task",
+    "attributes": {
+      "provider": "jira",
+      "project": "JIRA",
+      "status": "doing",
+      "assignee": "alice",
+      "updatedAt": "2025-10-31T12:00:00Z"
+    }
+  },
+  {
+    "id": "env:prod/app",
+    "title": "prod/app",
+    "description": "生产环境应用健康状态",
+    "url": "https://argocd.example.com/applications/prod-app",
+    "kind": "environment",
+    "attributes": {
+      "provider": "argocd",
+      "cluster": "prod",
+      "namespace": "app",
+      "app": "app",
+      "status": "healthy",
+      "updatedAt": "2025-10-31T09:30:00Z"
+    }
   }
 ]

@@ -66,4 +66,4 @@
 - LWW 为整条条目覆盖（不做字段级保留）已达一致。
 
 ---
-关联：`docs/design.md`（方向层数据策略），`RFC-001-code-providers.md`（GitHub 字段映射）。
+关联：`docs/design.md`（方向层数据策略），`RFC-001-kind-providers.md`（Kind 最小字段与示例）。
