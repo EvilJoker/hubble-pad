@@ -43,7 +43,7 @@
     "url": "https://example.com/repo2",
     "kind": "code",
     "source": "hook:github-repos1",
-    "updatedAt": "2025-10-31T09:28:06.929Z"
+    "updatedAt": "2025-10-31T14:15:33.536Z"
   },
   {
     "id": "repo9",
@@ -61,7 +61,7 @@
     "url": "https://example.com/repo1",
     "kind": "code",
     "source": "hook:github-repos1",
-    "updatedAt": "2025-10-31T09:28:06.929Z"
+    "updatedAt": "2025-10-31T14:15:33.536Z"
   },
   {
     "id": "jira:JIRA-123",

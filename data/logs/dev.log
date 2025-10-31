@@ -1,0 +1,54 @@
+{"time":"2025-10-31T14:13:53.024Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:13:53.028Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:13:53.044Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:13:53.116Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:13:53.444Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:13:53.480Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:13:58.791Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:13:58.794Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:13:58.799Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:13:58.832Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:13:59.091Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:13:59.123Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:20.246Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:20.258Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:20.289Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:20.326Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:20.357Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:20.361Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:20.720Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:20.724Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:20.838Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:21.099Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:21.101Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:21.107Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:21.202Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:21.226Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:21.230Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:22.404Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:22.412Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:22.694Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:26.916Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:26.920Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:14:26.924Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:26.978Z","level":"info","message":"workitems.kind.changed","data":{"kind":"task"}}
+{"time":"2025-10-31T14:14:27.529Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:14:27.577Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:15:04.771Z","level":"info","message":"hooks.exec.start","index":0,"name":"github-repos1","cmd":"bash data/hook/github_repo1.sh","cwd":"/media/vdc/github/hubble-pad"}
+{"time":"2025-10-31T14:15:04.793Z","level":"info","message":"hooks.exec.start","index":1,"name":"github-repos2","cmd":"bash data/hook/github_repo2.sh","cwd":"/media/vdc/github/hubble-pad"}
+{"time":"2025-10-31T14:15:16.176Z","level":"info","message":"hooks.exec.parsed","index":1,"ok":false,"items":0}
+{"time":"2025-10-31T14:15:16.211Z","level":"info","message":"hooks.exec.parsed","index":0,"ok":true,"items":2}
+{"time":"2025-10-31T14:15:16.213Z","level":"info","message":"hooks.merge.done","index":0,"added":0,"updated":2,"file":"/media/vdc/github/hubble-pad/data/workitems.json","beforeCount":8,"afterSize":2389,"mtime":"2025-10-31T14:15:16.212Z"}
+{"time":"2025-10-31T14:15:16.214Z","level":"info","message":"hooks.run_all.merged","index":0,"added":0,"updated":2}
+{"time":"2025-10-31T14:15:16.214Z","level":"error","message":"hooks.run_all.failed","index":1,"reason":"模拟失败: 拉取仓库出错"}
+{"time":"2025-10-31T14:15:16.256Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:15:16.331Z","level":"info","message":"workitems.load.success","data":{"count":8}}
+{"time":"2025-10-31T14:15:22.161Z","level":"info","message":"hooks.exec.start","index":0,"name":"github-repos1","cmd":"bash data/hook/github_repo1.sh","cwd":"/media/vdc/github/hubble-pad"}
+{"time":"2025-10-31T14:15:22.178Z","level":"info","message":"hooks.exec.start","index":1,"name":"github-repos2","cmd":"bash data/hook/github_repo2.sh","cwd":"/media/vdc/github/hubble-pad"}
+{"time":"2025-10-31T14:15:33.535Z","level":"info","message":"hooks.exec.parsed","index":0,"ok":true,"items":2}
+{"time":"2025-10-31T14:15:33.535Z","level":"info","message":"hooks.exec.parsed","index":1,"ok":false,"items":0}
+{"time":"2025-10-31T14:15:33.536Z","level":"info","message":"hooks.merge.done","index":0,"added":0,"updated":2,"file":"/media/vdc/github/hubble-pad/data/workitems.json","beforeCount":8,"afterSize":2389,"mtime":"2025-10-31T14:15:33.536Z"}
+{"time":"2025-10-31T14:15:33.537Z","level":"info","message":"hooks.run_all.merged","index":0,"added":0,"updated":2}
+{"time":"2025-10-31T14:15:33.537Z","level":"error","message":"hooks.run_all.failed","index":1,"reason":"模拟失败: 拉取仓库出错"}
+{"time":"2025-10-31T14:15:33.594Z","level":"info","message":"workitems.load.start","data":null}
+{"time":"2025-10-31T14:15:33.685Z","level":"info","message":"workitems.load.success","data":{"count":8}}

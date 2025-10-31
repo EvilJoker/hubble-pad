@@ -14,7 +14,7 @@
 - [x] 开发环境 /data 映射 与 /__data/save 写入
 - [x] 编辑数据弹窗（全量/条目级）+ 本地 JSON 校验与错误提示
 - [x] RFC-002 Hooks 开发中间件与 API（/__hooks/list、/__hooks/run/{index}、/__hooks/run-all、/__hooks/save）
-- [ ] kind 渲染兜底与注册表
+- [x] kind 渲染兜底与注册表
 - [ ] 增加日志组件，支持输出到日志与 console，并优化现有日志打印以改善维测
 
 
@@ -27,3 +27,4 @@
 - 2025-10-29: 初始版本
 - 2025-10-30: 前端技术栈调整为 Vue + Tailwind CSS + shadcn-vue；后续任务按新栈实施。
 - 2025-10-30: 完成 M1 UI 能力（页面骨架、搜索/排序、空态/错误）；集成 Tooltip；新增“编辑数据”弹窗与条目级编辑，保存走 dev 中间件。
+- 2025-10-31: 新增 Tabs 组件并接入 MainPanel，实现多 kind 过滤（code/task/environment），刷新按钮改为图标；workitems.json 补充多 kind 示例数据；新增 RFC-001-kind-providers 并更新引用。
