@@ -27,7 +27,21 @@ export default defineConfig({
       name: 'data-dev-map',
       configureServer(server) {
         const dataDir = path.resolve(__dirname, '../data')
+        const logDir = path.join(dataDir, 'logs')
+        const logFile = path.join(logDir, 'dev.log')
         const repoRoot = path.resolve(__dirname, '..')
+
+        function ensureLogDir() {
+          try { if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true }) } catch {}
+        }
+
+        function appendLog(entry: any) {
+          try {
+            ensureLogDir()
+            const line = JSON.stringify({ time: new Date().toISOString(), ...entry }) + '\n'
+            fs.appendFileSync(logFile, line, 'utf-8')
+          } catch {}
+        }
         server.middlewares.use('/data', (req, res, next) => {
           const url = req.url || '/'
           const rel = decodeURIComponent(url.replace(/^\/data\/?/, ''))
@@ -78,6 +92,36 @@ export default defineConfig({
           }
         })
 
+        // unified log endpoint
+        server.middlewares.use('/__log', async (req, res, next) => {
+          if (req.method !== 'POST') return next()
+          try {
+            const chunks: Buffer[] = []
+            await new Promise<void>((resolve, reject) => {
+              req.on('data', (c) => chunks.push(Buffer.from(c)))
+              req.on('end', () => resolve())
+              req.on('error', (e) => reject(e))
+            })
+            const raw = Buffer.concat(chunks).toString('utf-8')
+            const json = JSON.parse(raw)
+            appendLog(json)
+            const level = String(json?.level || 'info').toLowerCase()
+            const msg = String(json?.message || '')
+            const line = `[dev/log] ${level.toUpperCase()} ${msg}`
+            if (level === 'error') console.error(line)
+            else if (level === 'warn') console.warn(line)
+            else if (level === 'debug') console.debug(line)
+            else console.log(line)
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true }))
+          } catch (e) {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+          }
+        })
+
         // --- RFC-002 hooks endpoints ---
         const hooksFile = path.join(dataDir, 'hooks.json')
         const workitemsFile = path.join(dataDir, 'workitems.json')
@@ -103,7 +147,7 @@ export default defineConfig({
           const execCwd = path.isAbsolute(hook.cwd || '')
             ? (hook.cwd as string)
             : path.resolve(repoRoot, hook.cwd || '.')
-          console.log(`[hooks] exec index=${index} name=${hook.name || ''} cmd="${cmdStr}" cwd=${execCwd}`)
+          appendLog({ level: 'info', message: 'hooks.exec.start', index, name: hook.name || '', cmd: cmdStr, cwd: execCwd })
           const child = spawn('bash', ['-lc', cmdStr], { cwd: execCwd })
           const chunks: Buffer[] = []
           const errChunks: Buffer[] = []
@@ -123,9 +167,9 @@ export default defineConfig({
             const out = done.trim()
             const match = out.match(/\{[\s\S]*\}$/)
             parsed = JSON.parse(match ? match[0] : out)
-            console.log(`[hooks] parsed index=${index} ok=${parsed?.ok ?? parsed?.status} items=${Array.isArray(parsed?.items) ? parsed.items.length : 0}`)
+            appendLog({ level: 'info', message: 'hooks.exec.parsed', index, ok: parsed?.ok ?? parsed?.status, items: Array.isArray(parsed?.items) ? parsed.items.length : 0 })
           } catch (e) {
-            console.error(`[hooks] parse-failed index=${index} stderr=\n${stderr}`)
+            appendLog({ level: 'error', message: 'hooks.exec.parse_failed', index, stderr: stderr ? stderr.slice(0, 500) : null })
             throw new Error('Invalid JSON output from hook: ' + index + (stderr ? ('; stderr: ' + stderr.slice(0, 500)) : ''))
           }
           const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'))
@@ -161,7 +205,7 @@ export default defineConfig({
           fs.writeFileSync(tmp, outData, 'utf-8')
           fs.renameSync(tmp, workitemsFile)
           const afterStat = fs.statSync(workitemsFile)
-          console.log(`[hooks] merged index=${index} added=${added} updated=${updated} file=${workitemsFile} before=${beforeCount} afterSize=${afterStat.size} mtime=${afterStat.mtime.toISOString()}`)
+          appendLog({ level: 'info', message: 'hooks.merge.done', index, added, updated, file: workitemsFile, beforeCount, afterSize: afterStat.size, mtime: afterStat.mtime.toISOString() })
           return { added, updated }
         }
 
@@ -195,10 +239,11 @@ export default defineConfig({
                 const mr = mergeItemsFrom(i, nowISO, filtered)
                 updateHookStatus(i, nowISO, true, null)
                 added += mr.added; updated += mr.updated
+                appendLog({ level: 'info', message: 'hooks.run_all.merged', index: i, added: mr.added, updated: mr.updated })
                 details.push({ index: i, ok: true, added: mr.added, updated: mr.updated, items: filtered })
               } else {
                 const reason = r.status === 'rejected' ? String(r.reason) : (r.value?.error || 'Hook failed')
-                console.error(`[hooks] run-all item failed index=${i} reason=${reason}`)
+                appendLog({ level: 'error', message: 'hooks.run_all.failed', index: i, reason })
                 updateHookStatus(i, nowISO, false, reason)
                 details.push({ index: i, ok: false, error: reason })
               }
@@ -224,15 +269,17 @@ export default defineConfig({
               res.statusCode = 500
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: false, message: r.error || r.stderr || 'Hook failed' }))
+              appendLog({ level: 'error', message: 'hooks.run_one.failed', index, error: r.error || r.stderr || 'Hook failed' })
               return
             }
             const filtered = (Array.isArray(r.items) ? r.items : []).filter((x) => validateWorkitemMinimal(x))
             const mr = mergeItemsFrom(index, nowISO, filtered)
+            appendLog({ level: 'info', message: 'hooks.run_one.merged', index, added: mr.added, updated: mr.updated })
             updateHookStatus(index, nowISO, true, null)
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: true, added: mr.added, updated: mr.updated, items: filtered }))
           } catch (e) {
-            console.error(`[hooks] run-one error id=${id}`, e)
+            appendLog({ level: 'error', message: 'hooks.run_one.error', id, error: String((e as Error).message || e) })
             res.statusCode = 500
             res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
           }

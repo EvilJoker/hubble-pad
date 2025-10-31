@@ -1,5 +1,6 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import type { WorkItem } from '../types/workitem'
+import { logger } from '@/lib/logger'
 
 export type SortKey = 'title' | 'description'
 export type KindFilter = '' | 'code' | 'task' | 'environment'
@@ -40,18 +41,22 @@ export function useWorkitems() {
   // 监听 kindFilter 变化，同步到 URL
   watch(kindFilter, (newKind) => {
     updateURLKind(newKind)
+    logger.info('workitems.kind.changed', { kind: newKind || 'all' })
   })
 
   async function load() {
     loading.value = true
     error.value = null
     try {
+      logger.info('workitems.load.start')
       const res = await fetch('/data/workitems.json', { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       allItems.value = await res.json()
+      logger.info('workitems.load.success', { count: allItems.value.length })
     } catch (e: unknown) {
       error.value = (e as Error).message
       allItems.value = []
+      logger.error('workitems.load.failed', { message: error.value || '' })
     } finally {
       loading.value = false
     }
