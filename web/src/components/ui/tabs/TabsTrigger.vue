@@ -9,13 +9,14 @@ const props = defineProps<{
   class?: HTMLAttributes["class"]
 }>()
 
-const tabsValue = inject<ComputedRef<string> & { "update:modelValue": (val: string) => void }>("tabsValue")
+const tabsValue = inject<ComputedRef<string>>("tabsValue")
 
 const isActive = computed(() => tabsValue?.value === props.value)
 
 function handleClick() {
-  if (tabsValue && tabsValue["update:modelValue"]) {
-    tabsValue["update:modelValue"](props.value)
+  // tabsValue 是一个带 setter 的 computed，直接写 value 触发父级 v-model 更新
+  if (tabsValue) {
+    ;(tabsValue as any).value = props.value
   }
 }
 </script>

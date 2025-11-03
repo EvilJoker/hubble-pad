@@ -43,7 +43,7 @@ export default defineConfig({
           } catch {}
         }
         // dev: 返回配置的数据目录，供前端展示
-        server.middlewares.use('/api/config', (req, res, next) => {
+        server.middlewares.use('/api/config', (_req, res, _next) => {
           try {
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ dataDir }))

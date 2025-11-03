@@ -10,7 +10,7 @@
 - 目标：
   - 统一映射为 `WorkItem` 最小字段集：`id`、`title`、`description`、`url`、`kind?`、`attributes?`。
   - 通过前端以 URL Query `?kind=` 进行筛选展示；不改写数据文件。
-  - 支持三种首批 kind：`code` | `task` | `environment`。
+  - 支持四种首批 kind：`code` | `task` | `environment` | `knowledge`。
 - 非目标：
   - 不做平台功能复制（如 PR 审阅、流水线详情等）。
   - 不引入后端存储或额外聚合层；继续使用单文件事实源 `data/workitems.json`。
@@ -23,7 +23,7 @@ type WorkItem = {
   title: string
   description: string
   url: string
-  kind?: 'code' | 'task' | 'environment'
+  kind?: 'code' | 'task' | 'environment' | 'knowledge'
   attributes?: Record<string, any>
 }
 ```
@@ -62,6 +62,18 @@ attributes: {
 }
 ```
 
+- knowledge（示例扩展属性）
+```
+attributes: {
+  provider?: 'confluence' | 'notion' | 'gitbook' | 'wiki' | 'md',
+  space?: string,                // 知识空间/数据库/目录
+  path?: string,                 // 文档路径或页面 slug
+  tags?: string[],               // 标签集合
+  owner?: string,                // 负责人/作者
+  updatedAt?: string             // ISO 时间
+}
+```
+
 说明：`kind` 为可选展示字段；缺失 `kind` 的条目仅在“全部”视图展示。
 
 ## JSON Schema（指向）
@@ -75,6 +87,7 @@ attributes: {
   - code：GitHub / GitLab / Gitea 仓库入口
   - task：Jira / Linear / TAPD 问题或任务入口
   - environment：K8s/ArgoCD/Helm 环境或应用入口
+  - knowledge：Confluence / Notion / GitBook / 本地 Markdown 等
 
 ## 示例（混合列表）
 ```
@@ -84,6 +97,8 @@ attributes: {
     { "id": "repo_org_repo1", "title": "repo1", "description": "Core", "url": "https://github.com/org/repo1", "kind": "code", "attributes": { "provider": "github", "repo": "org/repo1", "defaultBranch": "main", "visibility": "private", "updatedAt": "2025-10-29T10:00:00Z" } },
     { "id": "jira_proj_123", "title": "JIRA-123 修复", "description": "修复登录异常", "url": "https://jira.example/browse/JIRA-123", "kind": "task", "attributes": { "provider": "jira", "project": "JIRA", "status": "doing", "assignee": "alice", "updatedAt": "2025-10-30T12:00:00Z" } },
     { "id": "k8s_ns_app", "title": "prod/app", "description": "生产环境应用", "url": "https://argocd.example/app/prod/app", "kind": "environment", "attributes": { "provider": "argocd", "cluster": "prod", "namespace": "app", "app": "app", "status": "healthy", "updatedAt": "2025-10-30T09:30:00Z" } }
+    ,
+    { "id": "conf_space_page1", "title": "研发规范", "description": "工程规范与最佳实践", "url": "https://confluence.example/pages/space/page1", "kind": "knowledge", "attributes": { "provider": "confluence", "space": "ENG", "tags": ["guideline","best-practice"], "owner": "team-core", "updatedAt": "2025-11-01T08:00:00Z" } }
   ]
 }
 ```

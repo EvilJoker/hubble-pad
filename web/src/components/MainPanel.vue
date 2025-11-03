@@ -47,7 +47,7 @@ onUnmounted(() => {
     <div id="right-pane" class="max-w-full min-w-0">
       <!-- 顶部标签页导航 -->
       <div class="mb-4">
-        <Tabs v-model="kindFilter" class="w-full">
+        <Tabs v-model:modelValue="kindFilter" class="w-full">
           <TabsList class="inline-flex h-9 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground">
             <TabsTrigger value="">
               <icon-lucide-grid class="w-4 h-4 mr-2" />
@@ -64,6 +64,10 @@ onUnmounted(() => {
             <TabsTrigger value="environment">
               <icon-lucide-server class="w-4 h-4 mr-2" />
               Environment
+            </TabsTrigger>
+            <TabsTrigger value="knowledge">
+              <icon-lucide-book-open class="w-4 h-4 mr-2" />
+              Knowledge
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -90,7 +94,9 @@ onUnmounted(() => {
       <div v-else-if="error" class="text-red-600">数据文件不可用：{{ error }}</div>
       <div v-else>
         <div v-if="items.length === 0" class="text-gray-500">
-          {{ kindFilter ? `暂无 ${kindFilter === 'code' ? '代码' : kindFilter === 'task' ? '任务' : '环境'} 资源` : '暂无资源，等待钩子更新' }}
+          {{ kindFilter
+            ? `暂无 ${kindFilter === 'code' ? '代码' : kindFilter === 'task' ? '任务' : kindFilter === 'environment' ? '环境' : '知识'} 资源`
+            : '暂无资源，等待钩子更新' }}
         </div>
         <div v-else class="rounded border bg-white w-[720px]">
           <template v-for="(it, idx) in items" :key="it.id">

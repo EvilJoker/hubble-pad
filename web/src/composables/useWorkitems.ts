@@ -3,7 +3,7 @@ import type { WorkItem } from '../types/workitem'
 import { logger } from '@/lib/logger'
 
 export type SortKey = 'title' | 'description'
-export type KindFilter = '' | 'code' | 'task' | 'environment'
+export type KindFilter = '' | 'code' | 'task' | 'environment' | 'knowledge'
 
 export function useWorkitems() {
   const allItems = ref<WorkItem[]>([])
@@ -19,7 +19,7 @@ export function useWorkitems() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const kind = params.get('kind') || ''
-      if (kind === '' || kind === 'code' || kind === 'task' || kind === 'environment') {
+      if (kind === '' || kind === 'code' || kind === 'task' || kind === 'environment' || kind === 'knowledge') {
         kindFilter.value = kind as KindFilter
       }
     }

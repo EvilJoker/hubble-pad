@@ -18,7 +18,7 @@
 - 单一抽象：`WorkItem`（最小必需字段 + 可选属性映射）。
 - 最小字段：`id`, `title`, `description`, `url`。
 - 分类扩展（不破坏统一抽象）：通过 `kind` 与 `attributes`（键值对）承载差异。
-  - 示例 `kind`：`code`（首期） | `task` | `environment` | `notice` ...；最终支持“自定义 kind”。
+  - 示例 `kind`：`code`（首期） | `task` | `environment` | `knowledge` | `notice` ...；最终支持“自定义 kind”。
 - 数据文件：`data/workitems.json`（单一事实源；只读给前端）。
 - 统一 Schema：见 `docs/schemas/workitem.schema.json`（方向层仅给出最小字段与原则）。
 
@@ -51,7 +51,7 @@
 
 ### 5.1 kind 启动范围
 - v0：仅支持 `kind=code`（仓库入口）。
-- v1：支持多 kind（如 `task`、`environment`），前端以筛选切换。
+- v1：支持多 kind（如 `task`、`environment`、`knowledge`），前端以筛选切换。
 - v2：支持“自定义 kind”（通过注册机制接入，前端无需改核心）。
 
 ## 6. UI 高层框架（草图）
@@ -117,5 +117,5 @@
   - 每个 `kind` 定义自己的属性键约定（RFC 描述），写入 `attributes`。
   - 前端以“kind→渲染器”的映射渲染卡片。未识别的 kind 走默认渲染（仅最小字段）。
 - 自定义 kind：
-  - 新增一个 `kind` 名称 + 简短说明 + 示例 JSON，即可被前端默认渲染；
+  - 新增一个 `kind` 名称（如 `knowledge`）+ 简短说明 + 示例 JSON，即可被前端默认渲染；
   - 若需要专属样式/图标，可通过“渲染器注册表”配置：`kindName -> renderer`（配置文件，不改代码）。

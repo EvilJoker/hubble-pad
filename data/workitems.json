@@ -43,7 +43,7 @@
     "url": "https://example.com/repo2",
     "kind": "code",
     "source": "hook:github-repos1",
-    "updatedAt": "2025-10-31T14:15:33.536Z"
+    "updatedAt": "2025-11-03T07:12:14.117Z"
   },
   {
     "id": "repo9",
@@ -61,7 +61,7 @@
     "url": "https://example.com/repo1",
     "kind": "code",
     "source": "hook:github-repos1",
-    "updatedAt": "2025-10-31T14:15:33.536Z"
+    "updatedAt": "2025-11-03T07:12:14.117Z"
   },
   {
     "id": "jira:JIRA-123",
@@ -90,6 +90,40 @@
       "app": "app",
       "status": "healthy",
       "updatedAt": "2025-10-31T09:30:00Z"
+    }
+  },
+  {
+    "id": "conf:ENG:oncall",
+    "title": "值班手册",
+    "description": "SRE 值班与紧急处理流程",
+    "url": "https://confluence.example.com/pages/ENG/oncall",
+    "kind": "knowledge",
+    "attributes": {
+      "provider": "confluence",
+      "space": "ENG",
+      "tags": [
+        "SRE",
+        "handbook"
+      ],
+      "owner": "team-sre",
+      "updatedAt": "2025-11-02T10:00:00Z"
+    }
+  },
+  {
+    "id": "notion:eng:guideline",
+    "title": "工程规范",
+    "description": "工程规范与最佳实践",
+    "url": "https://notion.example.com/eng/guideline",
+    "kind": "knowledge",
+    "attributes": {
+      "provider": "notion",
+      "space": "ENG",
+      "tags": [
+        "guideline",
+        "best-practice"
+      ],
+      "owner": "team-core",
+      "updatedAt": "2025-11-01T08:00:00Z"
     }
   }
 ]
