@@ -42,6 +42,16 @@ export default defineConfig({
             fs.appendFileSync(logFile, line, 'utf-8')
           } catch {}
         }
+        // dev: 返回配置的数据目录，供前端展示
+        server.middlewares.use('/api/config', (req, res, next) => {
+          try {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ dataDir }))
+          } catch (e) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: (e as Error).message }))
+          }
+        })
         server.middlewares.use('/data', (req, res, next) => {
           const url = req.url || '/'
           const rel = decodeURIComponent(url.replace(/^\/data\/?/, ''))

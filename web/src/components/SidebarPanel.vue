@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -68,8 +68,27 @@ let runAllStartMap: Map<string, string | null> | null = null
 // 使用 props 的 hooks 或内部加载的 hooks
 const hooks = computed(() => props.hooks ?? hooksData.value)
 
-// 初始化加载 hooks
+// Data 目录路径
+const dataDir = ref<string>('')
+
+// 加载配置
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config', { cache: 'no-store' })
+    if (res.ok) {
+      const config = await res.json()
+      dataDir.value = config.dataDir || ''
+    }
+  } catch (e) {
+    // 忽略错误，使用空值
+  }
+}
+
+// 初始化加载 hooks 和配置
 loadHooks()
+onMounted(() => {
+  loadConfig()
+})
 
 async function openHooksEditor() {
   try {
@@ -331,7 +350,14 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
                           </a>
                         </SidebarMenuButton>
                       </TooltipTrigger>
-                      <TooltipContent class="z-50">数据文件</TooltipContent>
+                      <TooltipContent class="z-50">
+                        <div class="text-xs">
+                          <div>数据文件</div>
+                          <div v-if="dataDir" class="mt-1 text-muted-foreground font-mono break-all">
+                            {{ dataDir }}
+                          </div>
+                        </div>
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <SidebarMenuActions>
