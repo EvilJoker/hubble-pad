@@ -1,0 +1,47 @@
+{
+  "name": "hubble-pad",
+  "version": "1.0.0",
+  "description": "Hubble Pad - A powerful work management tool",
+  "main": "server/index.js",
+  "bin": {
+    "hubble-pad": "./bin/cli.js"
+  },
+  "files": [
+    "dist",
+    "server",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "build:web": "cd web && npm run build",
+    "build:copy": "rm -rf dist && cp -r web/dist dist",
+    "build": "npm run build:web && npm run build:copy",
+    "dev": "cd web && npm run dev",
+    "prepack": "npm run build",
+    "pack": "npm pack"
+  },
+  "keywords": [
+    "work-management",
+    "productivity",
+    "task-management"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EvilJoker/hubble-pad.git"
+  },
+  "homepage": "https://github.com/EvilJoker/hubble-pad#readme",
+  "bugs": {
+    "url": "https://github.com/EvilJoker/hubble-pad/issues"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

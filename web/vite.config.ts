@@ -319,5 +319,3 @@ export default defineConfig({
     },
   ],
 })
-
-// removed duplicate default export

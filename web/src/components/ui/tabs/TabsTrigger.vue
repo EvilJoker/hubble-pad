@@ -14,8 +14,8 @@ const tabsValue = inject<ComputedRef<string> & { "update:modelValue": (val: stri
 const isActive = computed(() => tabsValue?.value === props.value)
 
 function handleClick() {
-  if (tabsValue && tabsValue.value !== undefined) {
-    tabsValue.value = props.value
+  if (tabsValue && tabsValue["update:modelValue"]) {
+    tabsValue["update:modelValue"](props.value)
   }
 }
 </script>

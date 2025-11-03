@@ -12,7 +12,6 @@ const externalEditor = ref<{ open: boolean; text: string; id?: string } | null>(
 type EditorMode = 'full' | 'item'
 const editorMode = ref<EditorMode>('full')
 const editingItemId = ref<string | null>(null)
-let fullDataSnapshot: any[] | null = null
 
 function openItemEditor(it: { id: string }) {
   editorMode.value = 'item'

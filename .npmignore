@@ -1,0 +1,52 @@
+# 源码目录（不发布）
+web/
+data/
+docs/
+
+# GitHub 配置
+.github/
+
+# 构建产物（web/dist 不发布，只发布根目录 dist）
+web/dist/
+
+# Git 配置
+.git/
+.gitignore
+
+# 依赖
+node_modules/
+
+# 日志
+*.log
+logs/
+
+# 测试文件
+*.test.js
+*.spec.js
+test/
+tests/
+
+# 开发配置文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 临时文件
+*.tmp
+.cache/
+*.tgz
+*.tar.gz
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# npm 配置（本身不需要发布）
+.npmignore

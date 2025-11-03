@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整的 git 历史，用于获取 commit hash
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install web dependencies
+        run: |
+          cd web
+          npm ci
+
+      - name: Build web project
+        run: |
+          cd web
+          npm run build
+
+      - name: Copy build artifacts
+        run: |
+          rm -rf dist
+          cp -r web/dist dist
+
+      - name: Determine version type
+        id: version_info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # 正式版本：从 tag 提取版本号
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            VERSION=${TAG_NAME#v}  # 去除 v 前缀
+            IS_BETA=false
+            echo "Extracting version from tag: $TAG_NAME -> $VERSION"
+          else
+            # Beta 版本：生成 snapshot 版本号
+            BASE_VERSION=$(node -p "require('./package.json').version")
+            DATE=$(date +%Y%m%d)
+            COMMIT_HASH=$(git rev-parse --short=7 HEAD)
+            VERSION="${BASE_VERSION}-snapshot.${DATE}.${COMMIT_HASH}"
+            IS_BETA=true
+            echo "Generating beta version: $VERSION"
+          fi
+
+          # 验证版本号格式（SemVer）
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$'; then
+            echo "Error: Invalid version format: $VERSION"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_beta=$IS_BETA" >> $GITHUB_OUTPUT
+
+      - name: Update package.json version
+        run: |
+          VERSION="${{ steps.version_info.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "Updated package.json version to: $VERSION"
+          cat package.json | grep -A 1 '"version"'
+
+      - name: Publish to npm (Beta)
+        if: steps.version_info.outputs.is_beta == 'true'
+        run: |
+          npm publish --tag beta
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm (Release)
+        if: steps.version_info.outputs.is_beta == 'false'
+        run: |
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Output release info
+        run: |
+          echo "✅ Release completed!"
+          echo "Version: ${{ steps.version_info.outputs.version }}"
+          echo "Type: ${{ steps.version_info.outputs.is_beta == 'true' && 'Beta' || 'Release' }}"
+          if [[ "${{ steps.version_info.outputs.is_beta }}" == "true" ]]; then
+            echo "Install with: npm install -g hubble-pad@beta"
+            echo "Or specific version: npm install -g hubble-pad@${{ steps.version_info.outputs.version }}"
+          else
+            echo "Install with: npm install -g hubble-pad"
+          fi
