@@ -46,7 +46,7 @@ defineOptions({
   inheritAttrs: false,
 })
 
-// Data 编辑内部状态
+// WorkItems 编辑内部状态
 const editorOpen = ref(false)
 const editorText = ref('')
 const saving = ref(false)
@@ -68,7 +68,7 @@ let runAllStartMap: Map<string, string | null> | null = null
 // 使用 props 的 hooks 或内部加载的 hooks
 const hooks = computed(() => props.hooks ?? hooksData.value)
 
-// Data 目录路径
+// WorkItems 目录路径
 const dataDir = ref<string>('')
 
 // 加载配置
@@ -213,7 +213,7 @@ function handleSaveEditor() {
   saveEditor()
 }
 
-// 当打开 Data 编辑对话框时，读取文件
+// 当打开 WorkItems 编辑对话框时，读取文件
 import { watch } from 'vue'
 watch(editorOpen, async (v) => {
   if (!v) return
@@ -332,12 +332,33 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
           <SidebarSeparator />
         </SidebarMenu>
 
-        <!-- Common group: contains Data and Hooks -->
+        <!-- Common group: contains WorkItems and Hooks -->
         <SidebarGroup>
           <SidebarGroupLabel>Common</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <!-- Data item -->
+              <!-- Config item -->
+              <SidebarMenuItem>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <SidebarMenuButton as-child>
+                        <a href="#" @click.prevent class="flex items-center gap-2 pl-3">
+                          <icon-lucide-settings class="w-4 h-4" />
+                          <span>Config</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent class="z-50">
+                      <div class="text-xs">
+                        配置文件目录：<span v-if="dataDir" class="font-mono break-all">{{ dataDir }}</span>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </SidebarMenuItem>
+
+              <!-- WorkItems item -->
               <SidebarMenuItem>
                 <Dialog v-model:open="editorOpen">
                   <TooltipProvider>
@@ -346,16 +367,20 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
                         <SidebarMenuButton as-child>
                           <a href="#" @click.prevent class="flex items-center gap-2 pl-3">
                             <icon-lucide-database class="w-4 h-4" />
-                            <span>Data</span>
+                            <span>WorkItems</span>
                           </a>
                         </SidebarMenuButton>
                       </TooltipTrigger>
                       <TooltipContent class="z-50">
                         <div class="text-xs">
-                          <div>数据文件</div>
-                          <div v-if="dataDir" class="mt-1 text-muted-foreground font-mono break-all">
-                            {{ dataDir }}
-                          </div>
+                          数据文件：
+                          <a
+                            href="https://github.com/EvilJoker/hubble-pad/blob/main/data/workitems.json"
+                            target="_blank"
+                            class="text-blue-600 underline ml-1"
+                          >
+                            示例
+                          </a>
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -392,7 +417,13 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
                         </a>
                       </SidebarMenuButton>
                     </TooltipTrigger>
-                    <TooltipContent class="z-50">钩子脚本</TooltipContent>
+                    <TooltipContent class="z-50">钩子脚本：<a
+                            href="https://github.com/EvilJoker/hubble-pad/blob/main/data/hooks.json"
+                            target="_blank"
+                            class="text-blue-600 underline ml-1"
+                          >
+                            示例
+                          </a></TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <SidebarMenuActions>
