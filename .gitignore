@@ -16,11 +16,9 @@ node_modules/
 # 日志
 *.log
 logs/
-data/logs/
 
-# 运行时数据（保留 data/hook/ 脚本）
-data/hooks.json
-data/workitems.json
+# 运行时数据（整个 data 目录）
+data/
 
 # 系统文件
 .DS_Store

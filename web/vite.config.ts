@@ -53,6 +53,10 @@ export default defineConfig({
           }
         })
         server.middlewares.use('/data', (req, res, next) => {
+          // 只处理 GET 请求，POST 请求留给其他中间件处理
+          if (req.method !== 'GET') {
+            return next()
+          }
           const url = req.url || '/'
           const rel = decodeURIComponent(url.replace(/^\/data\/?/, ''))
           const filePath = path.join(dataDir, rel)
@@ -97,6 +101,85 @@ export default defineConfig({
             res.end(JSON.stringify({ ok: true }))
           } catch (e) {
             res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+          }
+        })
+
+        // dev only toggle favorite endpoint
+        // Note: mount without trailing slash so both '/__data/toggle-favorite' and '/__data/toggle-favorite/:id' work
+        server.middlewares.use('/__data/toggle-favorite', async (req, res, next) => {
+          if (req.method !== 'POST') return next()
+          try {
+            // When mounted at '/__data/toggle-favorite', req.url starts with '/:id' or ''
+            const url = req.url || ''
+            const id = decodeURIComponent(url.replace(/^\//, ''))
+            if (!id) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'id is required' }))
+              return
+            }
+
+            const chunks: Buffer[] = []
+            await new Promise<void>((resolve, reject) => {
+              req.on('data', (c) => chunks.push(Buffer.from(c)))
+              req.on('end', () => resolve())
+              req.on('error', (e) => reject(e))
+            })
+            const raw = Buffer.concat(chunks).toString('utf-8')
+            const body = JSON.parse(raw)
+            const { favorite } = body
+
+            if (typeof favorite !== 'boolean') {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'favorite must be boolean' }))
+              return
+            }
+
+            const target = path.join(dataDir, 'workitems.json')
+            if (!fs.existsSync(target)) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems.json not found' }))
+              return
+            }
+
+            const content = fs.readFileSync(target, 'utf-8')
+            const workitems = JSON.parse(content)
+
+            if (!Array.isArray(workitems)) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems must be an array' }))
+              return
+            }
+
+            const item = workitems.find((it: any) => it && it.id === id)
+            if (!item) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: `WorkItem with id "${id}" not found` }))
+              return
+            }
+
+            // 更新收藏状态
+            if (favorite) {
+              item.favorite = true
+            } else {
+              delete item.favorite
+            }
+
+            // 原子写入：先写到临时文件，再重命名，避免并发写入导致数据丢失
+            const tmpFile = target + '.tmp'
+            fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8')
+            fs.renameSync(tmpFile, target)
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true }))
+          } catch (e) {
+            res.statusCode = 500
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
           }

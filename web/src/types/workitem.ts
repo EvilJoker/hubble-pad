@@ -4,5 +4,6 @@ export interface WorkItem {
   description: string
   url: string
   kind?: string
+  favorite?: boolean
   attributes?: Record<string, unknown>
 }

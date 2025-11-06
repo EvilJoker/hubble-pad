@@ -340,7 +340,7 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
               <!-- Config item -->
               <SidebarMenuItem>
                 <TooltipProvider>
-                  <Tooltip>
+                  <Tooltip :delayDuration="100">
                     <TooltipTrigger as-child>
                       <SidebarMenuButton as-child>
                         <a href="#" @click.prevent class="flex items-center gap-2 pl-3">
@@ -362,7 +362,7 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
               <SidebarMenuItem>
                 <Dialog v-model:open="editorOpen">
                   <TooltipProvider>
-                    <Tooltip>
+                    <Tooltip :delayDuration="100">
                       <TooltipTrigger as-child>
                         <SidebarMenuButton as-child>
                           <a href="#" @click.prevent class="flex items-center gap-2 pl-3">
@@ -408,7 +408,7 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
               <!-- Hooks item with sub-menu (default collapsed) -->
                   <SidebarMenuItem>
                 <TooltipProvider>
-                  <Tooltip>
+                  <Tooltip :delayDuration="100">
                     <TooltipTrigger as-child>
                       <SidebarMenuButton as-child>
                         <a href="#" class="flex items-center gap-2 pl-3">
@@ -445,7 +445,7 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
                     <div class="flex items-center w-full pl-3 gap-2">
                       <SidebarMenuSubButton as-child>
                         <TooltipProvider>
-                          <Tooltip>
+                          <Tooltip :delayDuration="100">
                             <TooltipTrigger as-child>
                               <a href="#" @click.prevent class="flex items-center gap-2 text-gray-800">
                                 <icon-lucide-file-code-2 :class="['w-3.5 h-3.5', h.lastError ? 'text-red-500' : 'text-gray-500']" />

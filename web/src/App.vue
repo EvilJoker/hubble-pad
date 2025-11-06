@@ -4,6 +4,7 @@ import SidebarPanel from '@/components/SidebarPanel.vue'
 import MainPanel from '@/components/MainPanel.vue'
 import { useWorkitems } from './composables/useWorkitems'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const { reload } = useWorkitems()
 const refreshTick = ref(0)
@@ -33,10 +34,12 @@ function openItemEditor(it: { id: string }) {
 
 <template>
   <SidebarProvider>
-    <div class="h-screen flex">
-      <SidebarPanel :external-editor="externalEditor" @dataSaved="() => { reload(); refreshTick++ }" />
+    <TooltipProvider>
+      <div class="h-screen flex">
+        <SidebarPanel :external-editor="externalEditor" @dataSaved="() => { reload(); refreshTick++ }" />
 
-      <MainPanel :refresh-token="refreshTick" @open-item-editor="openItemEditor" />
-    </div>
+        <MainPanel :refresh-token="refreshTick" @open-item-editor="openItemEditor" />
+      </div>
+    </TooltipProvider>
   </SidebarProvider>
 </template>

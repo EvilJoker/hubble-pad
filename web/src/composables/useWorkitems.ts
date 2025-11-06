@@ -79,8 +79,15 @@ export function useWorkitems() {
       )
     }
 
-    // 排序
+    // 排序：收藏的条目优先，然后按 sortKey 排序
     return [...base].sort((a, b) => {
+      // 优先显示收藏的条目
+      const aFavorite = a.favorite === true ? 1 : 0
+      const bFavorite = b.favorite === true ? 1 : 0
+      if (aFavorite !== bFavorite) {
+        return bFavorite - aFavorite // 收藏的在前
+      }
+      // 相同收藏状态时，按 sortKey 排序
       const av = (a[sortKey.value] || '').toString().toLowerCase()
       const bv = (b[sortKey.value] || '').toString().toLowerCase()
       return av.localeCompare(bv)
