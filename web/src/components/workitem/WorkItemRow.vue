@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import type { WorkItem } from '@/types/workitem'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
@@ -51,18 +51,31 @@ async function toggleFavorite() {
     toggling.value = false
   }
 }
+
+// 文本阶段：优先在显示层处理，保留原始数据与链接可点击
+function truncateMiddle(text: string | undefined, max: number): string {
+  const s = (text || '').trim()
+  if (s.length <= max) return s
+  // 采用首尾保留策略，兼顾 URL/长路径
+  const head = Math.max(0, Math.floor(max * 0.6))
+  const tail = Math.max(0, max - head - 1)
+  return s.slice(0, head) + '…' + s.slice(s.length - tail)
+}
+
+const displayTitle = computed(() => truncateMiddle(props.item.title, 80))
+const displayDescription = computed(() => truncateMiddle(props.item.description, 120))
 </script>
 
 <template>
   <Item size="sm" class="bg-white">
     <ItemHeader class="items-start">
-      <ItemContent class="min-w-0">
-        <a :href="item.url" target="_blank" class="block" @click="onOpen">
-          <ItemTitle class="truncate">{{ item.title }}</ItemTitle>
-          <ItemDescription class="truncate">{{ item.description }}</ItemDescription>
+      <ItemContent class="min-w-0 flex-1 overflow-hidden">
+        <a :href="item.url" target="_blank" class="block min-w-0" @click="onOpen">
+          <ItemTitle class="block" :title="item.title">{{ displayTitle }}</ItemTitle>
+          <ItemDescription class="block" :title="item.description">{{ displayDescription }}</ItemDescription>
         </a>
       </ItemContent>
-      <ItemActions class="whitespace-nowrap gap-1">
+      <ItemActions class="whitespace-nowrap gap-1 shrink-0">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger as-child>
