@@ -149,10 +149,9 @@ async function handleRunHookByName(name: string | undefined) {
 }
 
 async function handleRunHooksAll() {
-  if (runningNames.value.size > 0 || runningAll.value) {
-    alert('存在子任务正在运行，请等待完成后再执行全部')
-    return
-  }
+  if (runningAll.value) return
+  // 若残留子任务标记，先清理，避免误判导致无法触发
+  if (runningNames.value.size > 0) runningNames.value.clear()
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 60_000)
   runningAll.value = true

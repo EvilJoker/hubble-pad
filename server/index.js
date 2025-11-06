@@ -183,6 +183,20 @@ app.get('/__hooks/list', (req, res) => {
   }
 });
 
+// Unified client log endpoint (compat with dev server). Swallows logs to file.
+app.post('/__log', (req, res) => {
+  try {
+    const logDir = path.join(dataDir, 'logs');
+    try { if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true }); } catch {}
+    const logFile = path.join(logDir, 'dev.log');
+    const entry = Object.assign({ time: new Date().toISOString() }, req.body || {});
+    try { fs.appendFileSync(logFile, JSON.stringify(entry) + '\n', 'utf-8'); } catch {}
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // API: 保存 hooks 文件
 app.post('/__hooks/save', (req, res) => {
   try {
@@ -217,7 +231,17 @@ app.post('/__hooks/run/:name', async (req, res) => {
     }
 
     const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
-    const hook = Array.isArray(hooks) ? hooks.find(h => h.name === name) : null;
+    let hook = null;
+    if (Array.isArray(hooks)) {
+      // 兼容两种调用：按名称或按索引
+      const idx = Number(name);
+      if (!Number.isNaN(idx)) {
+        hook = hooks[idx];
+      }
+      if (!hook) {
+        hook = hooks.find(h => h && h.name === name) || null;
+      }
+    }
 
     if (!hook) {
       return res.status(404).json({ error: `Hook "${name}" not found` });
@@ -234,8 +258,9 @@ app.post('/__hooks/run/:name', async (req, res) => {
 
     exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
       // 更新 hook 状态
-      const updatedHooks = hooks.map(h => {
-        if (h.name === name) {
+      const updatedHooks = hooks.map((h, i) => {
+        const isTarget = (h && h.name === name) || (i === Number(name));
+        if (isTarget) {
           return {
             ...h,
             lastRunAt: new Date().toISOString(),
@@ -249,7 +274,49 @@ app.post('/__hooks/run/:name', async (req, res) => {
       if (error) {
         return res.status(500).json({ error: error.message, stderr });
       }
-      res.json({ ok: true, stdout });
+
+      // 解析脚本输出并合并到 workitems.json（与 dev 环境保持一致）
+      let parsed;
+      try {
+        const out = String(stdout || '').trim();
+        const match = out.match(/\{[\s\S]*\}$/); // 允许前后有其他输出
+        parsed = JSON.parse(match ? match[0] : out);
+      } catch (e) {
+        return res.json({ ok: true, merged: false, message: 'Output is not valid JSON', stdout });
+      }
+
+      const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
+      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+      if (!ok || items.length === 0) {
+        return res.json({ ok: true, merged: false, count: items.length, stdout });
+      }
+
+      // 最小校验
+      const filtered = items.filter((it) => it && typeof it === 'object'
+        && typeof it.id === 'string'
+        && typeof it.title === 'string'
+        && typeof it.description === 'string'
+        && typeof it.url === 'string');
+
+      try {
+        const workitemsFile = path.join(dataDir, 'workitems.json');
+        const exists = fs.existsSync(workitemsFile) ? fs.readFileSync(workitemsFile, 'utf-8') : '[]';
+        const current = JSON.parse(exists || '[]');
+        const map = new Map(current.map((x) => [x.id, x]));
+        const nowISO = new Date().toISOString();
+        let added = 0, updated = 0;
+        for (const it of filtered) {
+          const next = { ...it, source: `hook:${hook?.name || name}`, updatedAt: nowISO };
+          if (map.has(it.id)) updated++; else added++;
+          map.set(it.id, next);
+        }
+        const tmp = workitemsFile + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(Array.from(map.values()), null, 2) + '\n', 'utf-8');
+        fs.renameSync(tmp, workitemsFile);
+        return res.json({ ok: true, merged: true, added, updated, count: filtered.length });
+      } catch (e) {
+        return res.json({ ok: true, merged: false, message: String(e?.message || e), count: filtered.length });
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -265,35 +332,85 @@ app.post('/__hooks/run-all', async (req, res) => {
     }
 
     const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
-    const enabledHooks = Array.isArray(hooks) ? hooks.filter(h => h.enabled) : [];
+    const enabledIdx = (Array.isArray(hooks) ? hooks : [])
+      .map((h, i) => (h && h.enabled ? i : -1)).filter(i => i >= 0);
 
-    if (enabledHooks.length === 0) {
+    if (enabledIdx.length === 0) {
       return res.json({ ok: true, message: 'No enabled hooks to run' });
     }
 
-    // 异步执行所有 hooks，不等待完成
     const { exec } = require('child_process');
-    enabledHooks.forEach(hook => {
-      const cmd = hook.cmd;
-      const cwd = hook.cwd ? path.resolve(rootDir, hook.cwd) : rootDir;
 
-      exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
-        // 更新 hook 状态
-        const updatedHooks = hooks.map(h => {
-          if (h.name === hook.name) {
-            return {
-              ...h,
-              lastRunAt: new Date().toISOString(),
-              lastError: error ? (stderr || error.message) : null
-            };
+    function execHookByIndex(i) {
+      return new Promise((resolve) => {
+        const h = hooks[i];
+        if (!h) return resolve({ ok: false, error: 'Hook not found' });
+        const cmd = h.cmd;
+        const cwd = h.cwd ? path.resolve(rootDir, h.cwd) : rootDir;
+        exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
+          const nowISO = new Date().toISOString();
+          const updatedHooks = hooks.map((x, xi) => xi === i ? ({
+            ...x,
+            lastRunAt: nowISO,
+            lastError: error ? (stderr || error?.message) : null,
+          }) : x);
+          try { fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8'); } catch {}
+          if (error) return resolve({ ok: false, error: error.message, stderr });
+
+          // 解析 JSON
+          let parsed;
+          try {
+            const out = String(stdout || '').trim();
+            const match = out.match(/\{[\s\S]*\}$/);
+            parsed = JSON.parse(match ? match[0] : out);
+          } catch (e) {
+            return resolve({ ok: true, items: [] });
           }
-          return h;
+          const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
+          const items = Array.isArray(parsed?.items) ? parsed.items : [];
+          resolve({ ok, items });
         });
-        fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8');
       });
-    });
+    }
 
-    res.json({ ok: true, message: `Running ${enabledHooks.length} hooks` });
+    // 并发执行，串行合并
+    const results = await Promise.allSettled(enabledIdx.map((i) => execHookByIndex(i)));
+    let added = 0, updated = 0;
+    const details = [];
+    for (let k = 0; k < enabledIdx.length; k++) {
+      const i = enabledIdx[k];
+      const r = results[k];
+      const nowISO = new Date().toISOString();
+      if (r.status === 'fulfilled' && r.value.ok) {
+        const items = Array.isArray(r.value.items) ? r.value.items : [];
+        // 最小校验与合并
+        const filtered = items.filter((it) => it && typeof it === 'object'
+          && typeof it.id === 'string' && typeof it.title === 'string'
+          && typeof it.description === 'string' && typeof it.url === 'string');
+        try {
+          const workitemsFile = path.join(dataDir, 'workitems.json');
+          const exists = fs.existsSync(workitemsFile) ? fs.readFileSync(workitemsFile, 'utf-8') : '[]';
+          const current = JSON.parse(exists || '[]');
+          const map = new Map(current.map((x) => [x.id, x]));
+          for (const it of filtered) {
+            const next = { ...it, source: `hook:${hooks[i]?.name || i}`, updatedAt: nowISO };
+            if (map.has(it.id)) updated++; else added++;
+            map.set(it.id, next);
+          }
+          const tmp = workitemsFile + '.tmp';
+          fs.writeFileSync(tmp, JSON.stringify(Array.from(map.values()), null, 2) + '\n', 'utf-8');
+          fs.renameSync(tmp, workitemsFile);
+          details.push({ index: i, ok: true, added, updated });
+        } catch (e) {
+          details.push({ index: i, ok: false, error: String(e?.message || e) });
+        }
+      } else {
+        const reason = r.status === 'rejected' ? String(r.reason) : (r.value?.error || 'Hook failed');
+        details.push({ index: i, ok: false, error: reason });
+      }
+    }
+
+    res.json({ ok: true, added, updated, results: details });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }

@@ -34,11 +34,19 @@ def to_workitem(base_url: str, issue: Dict[str, Any]) -> Dict[str, Any]:
     issue_id = issue.get("id")
     get_name = lambda obj: (obj or {}).get("name", "").strip() or None
 
+    # 确保 URL 使用 localhost 而不是 redmine（与 fetch_issues 中的处理保持一致）
+    parsed = urllib.parse.urlparse(base_url)
+    if (parsed.hostname or "").lower() == "redmine":
+        netloc = f"localhost:{parsed.port}" if parsed.port else "localhost"
+        display_url = urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+    else:
+        display_url = base_url
+
     return {
         "id": f"redmine:{issue_id}",
         "title": issue.get("subject") or f"Redmine Issue {issue_id}",
         "description": issue.get("description") or "",
-        "url": f"{base_url.rstrip('/')}/issues/{issue_id}",
+        "url": f"{display_url.rstrip('/')}/issues/{issue_id}",
         "kind": "task",
         "attributes": {
             "provider": "redmine",
