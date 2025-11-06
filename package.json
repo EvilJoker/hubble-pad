@@ -18,7 +18,8 @@
     "build": "npm run build:web && npm run build:copy",
     "dev": "cd web && npm run dev",
     "prepack": "npm run build",
-    "pack": "npm pack"
+    "pack": "npm pack",
+    "install:local": "npm run build && npm pack && npm install -g hubble-pad-$(node -p \"require('./package.json').version\").tgz && rm -f hubble-pad-*.tgz && echo '✅ hubble-pad 已全局安装，可使用 hubble-pad 命令'"
   },
   "keywords": [
     "work-management",

@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const https = require('https');
+const http = require('http');
 
 // 获取服务器所在目录的绝对路径
 const serverDir = __dirname;
@@ -121,6 +123,22 @@ app.post('/__data/save', (req, res) => {
   }
 });
 
+// API: 获取 hooks 列表
+app.get('/__hooks/list', (req, res) => {
+  try {
+    const hooksFile = path.join(dataDir, 'hooks.json');
+    if (!fs.existsSync(hooksFile)) {
+      return res.json([]);
+    }
+    const content = fs.readFileSync(hooksFile, 'utf-8');
+    const hooks = JSON.parse(content);
+    res.json(Array.isArray(hooks) ? hooks : []);
+  } catch (error) {
+    console.error('Error reading hooks:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // API: 保存 hooks 文件
 app.post('/__hooks/save', (req, res) => {
   try {
@@ -145,10 +163,190 @@ app.post('/__hooks/save', (req, res) => {
   }
 });
 
-// API: 运行 hook
+// API: 运行单个 hook
 app.post('/__hooks/run/:name', async (req, res) => {
-  // TODO: 实现 hook 运行逻辑（如果需要）
-  res.status(501).json({ error: 'Not implemented' });
+  try {
+    const { name } = req.params;
+    const hooksFile = path.join(dataDir, 'hooks.json');
+    if (!fs.existsSync(hooksFile)) {
+      return res.status(404).json({ error: 'hooks.json not found' });
+    }
+
+    const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
+    const hook = Array.isArray(hooks) ? hooks.find(h => h.name === name) : null;
+
+    if (!hook) {
+      return res.status(404).json({ error: `Hook "${name}" not found` });
+    }
+
+    if (!hook.enabled) {
+      return res.status(400).json({ error: `Hook "${name}" is disabled` });
+    }
+
+    // 执行 hook 命令
+    const { exec } = require('child_process');
+    const cmd = hook.cmd;
+    const cwd = hook.cwd ? path.resolve(rootDir, hook.cwd) : rootDir;
+
+    exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
+      // 更新 hook 状态
+      const updatedHooks = hooks.map(h => {
+        if (h.name === name) {
+          return {
+            ...h,
+            lastRunAt: new Date().toISOString(),
+            lastError: error ? (stderr || error.message) : null
+          };
+        }
+        return h;
+      });
+      fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8');
+
+      if (error) {
+        return res.status(500).json({ error: error.message, stderr });
+      }
+      res.json({ ok: true, stdout });
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// API: 运行所有 hooks
+app.post('/__hooks/run-all', async (req, res) => {
+  try {
+    const hooksFile = path.join(dataDir, 'hooks.json');
+    if (!fs.existsSync(hooksFile)) {
+      return res.status(404).json({ error: 'hooks.json not found' });
+    }
+
+    const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
+    const enabledHooks = Array.isArray(hooks) ? hooks.filter(h => h.enabled) : [];
+
+    if (enabledHooks.length === 0) {
+      return res.json({ ok: true, message: 'No enabled hooks to run' });
+    }
+
+    // 异步执行所有 hooks，不等待完成
+    const { exec } = require('child_process');
+    enabledHooks.forEach(hook => {
+      const cmd = hook.cmd;
+      const cwd = hook.cwd ? path.resolve(rootDir, hook.cwd) : rootDir;
+
+      exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
+        // 更新 hook 状态
+        const updatedHooks = hooks.map(h => {
+          if (h.name === hook.name) {
+            return {
+              ...h,
+              lastRunAt: new Date().toISOString(),
+              lastError: error ? (stderr || error.message) : null
+            };
+          }
+          return h;
+        });
+        fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8');
+      });
+    });
+
+    res.json({ ok: true, message: `Running ${enabledHooks.length} hooks` });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// AI API 配置
+const AI_API_URL = process.env.AI_API_URL || 'https://studio.zte.com.cn/zte-studio-ai-platform/openapi/v1/chat';
+const AI_API_KEY = process.env.AI_API_KEY || 'a87bc16274ed4b748ad33ee1f362023c';
+
+// API: AI 聊天接口代理
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const { messages, ...otherParams } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages must be an array' });
+    }
+
+    // 构建请求体
+    const requestBody = {
+      messages,
+      ...otherParams,
+    };
+
+    // 解析 URL
+    const url = new URL(AI_API_URL);
+    const isHttps = url.protocol === 'https:';
+    const requestModule = isHttps ? https : http;
+
+    // 准备请求选项
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AI_API_KEY}`,
+      },
+    };
+
+    // 发送请求
+    const requestPromise = new Promise((resolve, reject) => {
+      const req = requestModule.request(options, (response) => {
+        let data = '';
+
+        response.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        response.on('end', () => {
+          try {
+            // 设置响应头
+            res.status(response.statusCode || 200);
+            Object.keys(response.headers).forEach((key) => {
+              if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
+                res.setHeader(key, response.headers[key]);
+              }
+            });
+
+            // 尝试解析 JSON，如果失败则返回原始数据
+            try {
+              const jsonData = JSON.parse(data);
+              resolve(jsonData);
+            } catch {
+              resolve(data);
+            }
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      // 设置超时
+      req.setTimeout(60000, () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+
+      // 发送请求体
+      req.write(JSON.stringify(requestBody));
+      req.end();
+    });
+
+    const result = await requestPromise;
+    res.json(result);
+  } catch (error) {
+    console.error('AI API error:', error);
+    res.status(500).json({
+      error: 'Failed to call AI API',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 });
 
 // 提供静态文件服务

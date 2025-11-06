@@ -118,6 +118,16 @@ npm run dev          # 如果配置了根目录的 dev 脚本
 ```
 
 **步骤 2：本地构建和测试**
+
+**方式 A：使用一键安装脚本（推荐）**
+```bash
+# 在根目录执行，一键完成构建、打包、安装
+npm run install:local
+hubble-pad start      # 测试运行
+hubble-pad --version  # 测试版本命令
+```
+
+**方式 B：手动执行各步骤**
 ```bash
 # 在根目录执行
 npm run build         # 构建并复制产物
@@ -590,6 +600,10 @@ npm run dev
 # 构建（在根目录）
 npm run build
 # 这会构建 web/ 并复制产物到根目录 dist/
+
+# 全局安装命令（一键构建+打包+安装）
+npm run install:local
+# 这会自动执行：构建 → 打包 → 全局安装 → 清理临时文件
 
 # 本地测试运行（构建后）
 node server/index.js
