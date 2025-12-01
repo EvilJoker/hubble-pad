@@ -9,6 +9,9 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 
 export default defineConfig({
+  server: {
+    port: 10002,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
