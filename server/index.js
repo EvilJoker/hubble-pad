@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const https = require('https');
 const http = require('http');
+const crypto = require('crypto');
 
 // 获取服务器所在目录的绝对路径
 const serverDir = __dirname;
@@ -28,6 +29,28 @@ function getDataDir() {
 }
 
 const dataDir = getDataDir();
+
+// 生成类似 Git commit 的 40 位十六进制 ID
+function generateCommitLikeId() {
+  return crypto.randomBytes(20).toString('hex');
+}
+
+// 规范化 workitem 的 id：
+// - 如果已经是 40 位十六进制字符串，则保持不变
+// - 否则根据给定的种子内容生成稳定的 hash
+function normalizeWorkitemId(it, seed) {
+  const id = typeof it.id === 'string' ? it.id : '';
+  if (/^[0-9a-f]{40}$/.test(id)) {
+    return id;
+  }
+  const h = crypto.createHash('sha1');
+  h.update(seed || '');
+  h.update('\n');
+  h.update(String(it.title || ''));
+  h.update('\n');
+  h.update(String(it.url || ''));
+  return h.digest('hex');
+}
 
 // 确保 data 目录存在
 function ensureDataDir() {
@@ -107,16 +130,23 @@ app.post('/__data/save', (req, res) => {
       throw new Error('workitems must be an array');
     }
 
+    const normalized = [];
     for (const it of json) {
       if (!it || typeof it !== 'object') throw new Error('workitem must be object');
-      const reqFields = ['id', 'title', 'description', 'url'];
+      const reqFields = ['title', 'description', 'url'];
       for (const f of reqFields) {
         if (typeof it[f] !== 'string') throw new Error(`workitem.${f} must be string`);
       }
+      const next = Object.assign({}, it);
+      next.id = normalizeWorkitemId(
+        it,
+        `manual:${String(it.id || '')}:${String(it.title || '')}:${String(it.url || '')}`,
+      );
+      normalized.push(next);
     }
 
     const target = path.join(dataDir, 'workitems.json');
-    fs.writeFileSync(target, JSON.stringify(json, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(target, JSON.stringify(normalized, null, 2) + '\n', 'utf-8');
     res.json({ ok: true });
   } catch (error) {
     res.status(400).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
@@ -291,12 +321,20 @@ app.post('/__hooks/run/:name', async (req, res) => {
         return res.json({ ok: true, merged: false, count: items.length, stdout });
       }
 
-      // 最小校验
-      const filtered = items.filter((it) => it && typeof it === 'object'
-        && typeof it.id === 'string'
-        && typeof it.title === 'string'
-        && typeof it.description === 'string'
-        && typeof it.url === 'string');
+      // 最小校验，并规范化 id
+      const filtered = items
+        .filter((it) => it && typeof it === 'object'
+          && typeof it.title === 'string'
+          && typeof it.description === 'string'
+          && typeof it.url === 'string')
+        .map((it) => {
+          const next = Object.assign({}, it);
+          next.id = normalizeWorkitemId(
+            it,
+            `hook:${hook?.name || name}:${String(it.id || '')}:${String(it.url || '')}`,
+          );
+          return next;
+        });
 
       try {
         const workitemsFile = path.join(dataDir, 'workitems.json');
@@ -307,8 +345,8 @@ app.post('/__hooks/run/:name', async (req, res) => {
         let added = 0, updated = 0;
         for (const it of filtered) {
           const next = { ...it, source: `hook:${hook?.name || name}`, updatedAt: nowISO };
-          if (map.has(it.id)) updated++; else added++;
-          map.set(it.id, next);
+          if (map.has(next.id)) updated++; else added++;
+          map.set(next.id, next);
         }
         const tmp = workitemsFile + '.tmp';
         fs.writeFileSync(tmp, JSON.stringify(Array.from(map.values()), null, 2) + '\n', 'utf-8');
@@ -383,10 +421,20 @@ app.post('/__hooks/run-all', async (req, res) => {
       const nowISO = new Date().toISOString();
       if (r.status === 'fulfilled' && r.value.ok) {
         const items = Array.isArray(r.value.items) ? r.value.items : [];
-        // 最小校验与合并
-        const filtered = items.filter((it) => it && typeof it === 'object'
-          && typeof it.id === 'string' && typeof it.title === 'string'
-          && typeof it.description === 'string' && typeof it.url === 'string');
+        // 最小校验与合并，并规范化 id
+        const filtered = items
+          .filter((it) => it && typeof it === 'object'
+            && typeof it.title === 'string'
+            && typeof it.description === 'string'
+            && typeof it.url === 'string')
+          .map((it) => {
+            const next = Object.assign({}, it);
+            next.id = normalizeWorkitemId(
+              it,
+              `hook:${hooks[i]?.name || i}:${String(it.id || '')}:${String(it.url || '')}`,
+            );
+            return next;
+          });
         try {
           const workitemsFile = path.join(dataDir, 'workitems.json');
           const exists = fs.existsSync(workitemsFile) ? fs.readFileSync(workitemsFile, 'utf-8') : '[]';
@@ -394,8 +442,8 @@ app.post('/__hooks/run-all', async (req, res) => {
           const map = new Map(current.map((x) => [x.id, x]));
           for (const it of filtered) {
             const next = { ...it, source: `hook:${hooks[i]?.name || i}`, updatedAt: nowISO };
-            if (map.has(it.id)) updated++; else added++;
-            map.set(it.id, next);
+            if (map.has(next.id)) updated++; else added++;
+            map.set(next.id, next);
           }
           const tmp = workitemsFile + '.tmp';
           fs.writeFileSync(tmp, JSON.stringify(Array.from(map.values()), null, 2) + '\n', 'utf-8');
