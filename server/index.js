@@ -36,20 +36,15 @@ function generateCommitLikeId() {
 }
 
 // 规范化 workitem 的 id：
-// - 如果已经是 40 位十六进制字符串，则保持不变
-// - 否则根据给定的种子内容生成稳定的 hash
+// - 如果调用方已经提供了非空 id，则直接使用，不再强制转换为 40 位
+// - 只有在缺少 id 时，才自动生成一个 40 位的随机值
 function normalizeWorkitemId(it, seed) {
-  const id = typeof it.id === 'string' ? it.id : '';
-  if (/^[0-9a-f]{40}$/.test(id)) {
+  const id = typeof it.id === 'string' ? it.id.trim() : '';
+  if (id) {
     return id;
   }
-  const h = crypto.createHash('sha1');
-  h.update(seed || '');
-  h.update('\n');
-  h.update(String(it.title || ''));
-  h.update('\n');
-  h.update(String(it.url || ''));
-  return h.digest('hex');
+  // 兼容旧调用签名保留 seed 参数，但当前逻辑不再依赖 seed，直接生成随机 id
+  return generateCommitLikeId();
 }
 
 // 确保 data 目录存在
@@ -130,6 +125,11 @@ app.post('/__data/save', (req, res) => {
       throw new Error('workitems must be an array');
     }
 
+    const target = path.join(dataDir, 'workitems.json');
+    const exists = fs.existsSync(target) ? fs.readFileSync(target, 'utf-8') : '[]';
+    const current = JSON.parse(exists || '[]');
+    const map = new Map(current.map((x) => [x.id, x]));
+
     const normalized = [];
     for (const it of json) {
       if (!it || typeof it !== 'object') throw new Error('workitem must be object');
@@ -142,10 +142,14 @@ app.post('/__data/save', (req, res) => {
         it,
         `manual:${String(it.id || '')}:${String(it.title || '')}:${String(it.url || '')}`,
       );
+      // 保留现有的 storage 字段（本地信息）
+      const existing = map.get(next.id);
+      if (existing && existing.storage) {
+        next.storage = existing.storage;
+      }
       normalized.push(next);
     }
 
-    const target = path.join(dataDir, 'workitems.json');
     fs.writeFileSync(target, JSON.stringify(normalized, null, 2) + '\n', 'utf-8');
     res.json({ ok: true });
   } catch (error) {
@@ -192,6 +196,61 @@ app.post('/__data/toggle-favorite/:id', (req, res) => {
     fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8');
     fs.renameSync(tmpFile, target);
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// API: 添加 workitem 的变更记录到 storage.records
+app.post('/__data/add-record/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { record } = req.body;
+
+    if (!record || typeof record !== 'object') {
+      return res.status(400).json({ ok: false, message: 'record must be an object' });
+    }
+
+    const target = path.join(dataDir, 'workitems.json');
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ ok: false, message: 'workitems.json not found' });
+    }
+
+    const content = fs.readFileSync(target, 'utf-8');
+    const workitems = JSON.parse(content);
+
+    if (!Array.isArray(workitems)) {
+      return res.status(400).json({ ok: false, message: 'workitems must be an array' });
+    }
+
+    const item = workitems.find(it => it && it.id === id);
+    if (!item) {
+      return res.status(404).json({ ok: false, message: `WorkItem with id "${id}" not found` });
+    }
+
+    // 确保 storage 对象存在
+    if (!item.storage) {
+      item.storage = {};
+    }
+    // 确保 records 数组存在
+    if (!Array.isArray(item.storage.records)) {
+      item.storage.records = [];
+    }
+
+    // 添加时间戳（如果记录中没有）
+    const recordWithTime = {
+      ...record,
+      createdAt: record.createdAt || new Date().toISOString(),
+    };
+
+    // 添加到 records 数组
+    item.storage.records.push(recordWithTime);
+
+    // 原子写入：先写到临时文件，再重命名，避免并发写入导致数据丢失
+    const tmpFile = target + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmpFile, target);
+    res.json({ ok: true, record: recordWithTime });
   } catch (error) {
     res.status(500).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
   }
@@ -344,7 +403,15 @@ app.post('/__hooks/run/:name', async (req, res) => {
         const nowISO = new Date().toISOString();
         let added = 0, updated = 0;
         for (const it of filtered) {
-          const next = { ...it, source: `hook:${hook?.name || name}`, updatedAt: nowISO };
+          const existing = map.get(it.id);
+          // 保留现有的 storage 字段（本地信息，外部系统不会携带）
+          const next = {
+            ...it,
+            source: `hook:${hook?.name || name}`,
+            updatedAt: nowISO,
+            // 如果已存在且有自己的 storage，则保留；否则不设置（让外部数据覆盖其他字段）
+            ...(existing && existing.storage ? { storage: existing.storage } : {}),
+          };
           if (map.has(next.id)) updated++; else added++;
           map.set(next.id, next);
         }
@@ -441,7 +508,15 @@ app.post('/__hooks/run-all', async (req, res) => {
           const current = JSON.parse(exists || '[]');
           const map = new Map(current.map((x) => [x.id, x]));
           for (const it of filtered) {
-            const next = { ...it, source: `hook:${hooks[i]?.name || i}`, updatedAt: nowISO };
+            const existing = map.get(it.id);
+            // 保留现有的 storage 字段（本地信息，外部系统不会携带）
+            const next = {
+              ...it,
+              source: `hook:${hooks[i]?.name || i}`,
+              updatedAt: nowISO,
+              // 如果已存在且有自己的 storage，则保留；否则不设置（让外部数据覆盖其他字段）
+              ...(existing && existing.storage ? { storage: existing.storage } : {}),
+            };
             if (map.has(next.id)) updated++; else added++;
             map.set(next.id, next);
           }

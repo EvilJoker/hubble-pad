@@ -15,8 +15,8 @@
 - 脚本输出（stdout）：统一为对象
   - 成功：`{ ok: true, items: WorkItem[] }`
   - 失败：`{ ok: false, error: string, items?: WorkItem[] }`
-  - WorkItem 至少包含 `id/title/description/url`（string），可含 `kind/attributes`
-- 合并与落盘：系统读取脚本输出中的 `items`，按 `id` 合并到 `data/workitems.json`（整条覆盖，LWW）。
+  - WorkItem 至少包含 `id/title/description/url`（string），可含 `kind/attributes`；**不建议脚本直接写入 `storage` 字段**（该字段由本地系统维护，用于存放本地扩展信息）
+- 合并与落盘：系统读取脚本输出中的 `items`，按 `id` 合并到 `data/workitems.json`（整条覆盖，LWW），但会**保留已有条目的 `storage` 字段**（如 `storage.records` 的变更记录）。
 - 元数据：系统在合并时为条目补充 `source="hook:<id>"` 与 `updatedAt`（ISO 时间）。
 - 配置文件：`data/hooks.json` 管理脚本清单（不删除真实脚本）。
 
@@ -63,7 +63,7 @@
 
 ## 待确认
 - 是否需要 hooks 级 `timeoutMs`、重试次数等高级配置（默认不实现）。
-- LWW 为整条条目覆盖（不做字段级保留）已达一致。
+- LWW 为整条条目覆盖（不做字段级保留），**唯一例外是 `storage` 字段会在覆盖时被保留**（承载本地信息，不由外部系统回填）。
 
 ---
 关联：`docs/design.md`（方向层数据策略），`RFC-001-kind-providers.md`（Kind 最小字段与示例）。

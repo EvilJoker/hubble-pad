@@ -10,7 +10,28 @@
     "description": { "type": "string" },
     "url": { "type": "string", "format": "uri" },
     "kind": { "type": "string" },
-    "attributes": { "type": "object", "additionalProperties": true }
+    "attributes": { "type": "object", "additionalProperties": true },
+    "source": { "type": "string" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "favorite": { "type": "boolean" },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "content": { "type": "string" },
+              "type": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
   },
   "additionalProperties": false
 }

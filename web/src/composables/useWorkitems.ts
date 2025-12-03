@@ -1,4 +1,4 @@
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import type { WorkItem } from '../types/workitem'
 import { logger } from '@/lib/logger'
 
@@ -14,21 +14,38 @@ export function useWorkitems() {
   const sortKey = ref<SortKey>('title')
   const kindFilter = ref<KindFilter>('')
 
+  // 标志位，防止循环更新
+  let isSyncingFromURL = false
+
   // 从 URL query 读取 kind 参数
   function syncKindFromURL() {
     if (typeof window !== 'undefined') {
+      isSyncingFromURL = true
       const params = new URLSearchParams(window.location.search)
       const kind = params.get('kind') || ''
       if (kind === '' || kind === 'code' || kind === 'task' || kind === 'environment' || kind === 'knowledge') {
-        kindFilter.value = kind as KindFilter
+        const newKind = kind as KindFilter
+        // 只有当值不同时才更新，避免不必要的触发
+        if (kindFilter.value !== newKind) {
+          kindFilter.value = newKind
+        }
       }
+      // 使用 nextTick 确保在下一个事件循环中重置标志
+      nextTick(() => {
+        isSyncingFromURL = false
+      })
     }
   }
 
   // 更新 URL query 参数
   function updateURLKind(kind: KindFilter) {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isSyncingFromURL) {
       const url = new URL(window.location.href)
+      const currentKind = url.searchParams.get('kind') || ''
+      // 只有当 URL 中的值不同时才更新，避免不必要的 history 操作
+      if ((kind === '' && currentKind === '') || (kind !== '' && currentKind === kind)) {
+        return
+      }
       if (kind === '') {
         url.searchParams.delete('kind')
       } else {
@@ -40,8 +57,10 @@ export function useWorkitems() {
 
   // 监听 kindFilter 变化，同步到 URL
   watch(kindFilter, (newKind) => {
-    updateURLKind(newKind)
-    logger.info('workitems.kind.changed', { kind: newKind || 'all' })
+    if (!isSyncingFromURL) {
+      updateURLKind(newKind)
+      logger.info('workitems.kind.changed', { kind: newKind || 'all' })
+    }
   })
 
   async function load() {
