@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import SidebarPanel from '@/components/SidebarPanel.vue'
+import KindPage from '@/components/KindPage.vue'
 import DataPage from '@/components/DataPage.vue'
 import TaskPage from '@/components/TaskPage.vue'
 import ActivityPage from '@/components/ActivityPage.vue'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-const currentPath = ref('/data')
+const currentPath = ref('/kind')
 
 function handleNavigate(path: string) {
   currentPath.value = path
@@ -15,12 +16,12 @@ function handleNavigate(path: string) {
 }
 
 function syncPathFromHash() {
-  const hash = window.location.hash.slice(1) || '/data'
-  if (hash === '/data' || hash === '/task' || hash === '/activity') {
+  const hash = window.location.hash.slice(1) || '/kind'
+  if (hash === '/kind' || hash === '/data' || hash === '/task' || hash === '/activity') {
     currentPath.value = hash
   } else {
-    currentPath.value = '/data'
-    window.location.hash = '/data'
+    currentPath.value = '/kind'
+    window.location.hash = '/kind'
   }
 }
 
@@ -35,6 +36,8 @@ onUnmounted(() => {
 
 const currentComponent = computed(() => {
   switch (currentPath.value) {
+    case '/kind':
+      return KindPage
     case '/data':
       return DataPage
     case '/task':
@@ -42,7 +45,7 @@ const currentComponent = computed(() => {
     case '/activity':
       return ActivityPage
     default:
-      return DataPage
+      return KindPage
   }
 })
 </script>

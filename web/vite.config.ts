@@ -365,6 +365,70 @@ export default defineConfig({
           }
         })
 
+        // --- kinds endpoints ---
+        const kindsFile = path.join(dataDir, 'kind.json')
+
+        server.middlewares.use('/__data/kinds', async (req, res, next) => {
+          if (req.method === 'GET') {
+            try {
+              if (!fs.existsSync(kindsFile)) {
+                res.setHeader('Content-Type', 'application/json')
+                res.end('[]')
+                return
+              }
+              const txt = fs.readFileSync(kindsFile, 'utf-8')
+              res.setHeader('Content-Type', 'application/json')
+              res.end(txt)
+            } catch (e) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+            }
+            return
+          }
+          if (req.method === 'POST') {
+            try {
+              const chunks: Buffer[] = []
+              await new Promise<void>((resolve, reject) => {
+                req.on('data', (c) => chunks.push(Buffer.from(c)))
+                req.on('end', () => resolve())
+                req.on('error', (e) => reject(e))
+              })
+              const raw = Buffer.concat(chunks).toString('utf-8')
+              const json = JSON.parse(raw)
+              if (!Array.isArray(json)) {
+                throw new Error('kinds must be an array')
+              }
+              for (const kind of json) {
+                if (!kind || typeof kind !== 'object') {
+                  throw new Error('kind must be object')
+                }
+                if (typeof kind.value !== 'string' || !kind.value.trim()) {
+                  throw new Error('kind.value must be non-empty string')
+                }
+                if (typeof kind.label !== 'string' || !kind.label.trim()) {
+                  throw new Error('kind.label must be non-empty string')
+                }
+                if (typeof kind.color !== 'string') {
+                  throw new Error('kind.color must be string')
+                }
+              }
+              const tmpFile = kindsFile + '.tmp'
+              fs.writeFileSync(tmpFile, JSON.stringify(json, null, 2) + '\n', 'utf-8')
+              fs.renameSync(tmpFile, kindsFile)
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: true }))
+            } catch (e) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+            }
+            return
+          }
+          next()
+        })
+
         // --- RFC-002 hooks endpoints ---
         const hooksFile = path.join(dataDir, 'hooks.json')
         const workitemsFile = path.join(dataDir, 'workitems.json')

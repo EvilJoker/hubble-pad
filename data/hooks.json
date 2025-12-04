@@ -1,0 +1,22 @@
+[
+  {
+    "name": "fetch-rdc",
+    "desc": "拉取 RDC 工作项",
+    "cmd": "python data/hook/rdc_export/get_rdc_workitems.py",
+    "cwd": "./",
+    "enabled": true,
+    "lastRunAt": "2025-12-04T04:03:34.602Z",
+    "lastError": null,
+    "type": "update",
+    "schedule": null
+  },
+  {
+    "name": "github-repos2",
+    "desc": "示例：拉取 GitHub 组织仓库并输出 WorkItem[]",
+    "cmd": "bash data/hook/github_repo2.sh",
+    "cwd": "./",
+    "enabled": true,
+    "lastRunAt": "2025-11-03T07:12:14.120Z",
+    "lastError": "模拟失败: 拉取仓库出错"
+  }
+]

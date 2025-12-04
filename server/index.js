@@ -60,11 +60,142 @@ function ensureDataDir() {
     // 初始化必要的文件
     const workitemsFile = path.join(dataDir, 'workitems.json');
     const hooksFile = path.join(dataDir, 'hooks.json');
+    const kindsFile = path.join(dataDir, 'kind.json');
     if (!fs.existsSync(workitemsFile)) {
       fs.writeFileSync(workitemsFile, '[]\n', 'utf-8');
     }
     if (!fs.existsSync(hooksFile)) {
       fs.writeFileSync(hooksFile, '[]\n', 'utf-8');
+    }
+    if (!fs.existsSync(kindsFile)) {
+      const defaultKinds = [
+        {
+          value: 'code',
+          label: 'Code',
+          color: 'bg-blue-100 text-blue-700',
+          description: '用于代码相关的工作项',
+          example: JSON.stringify({
+            id: 'CODE-001',
+            title: '示例：代码审查任务',
+            description: '这是一个代码类型的示例工作项，用于演示系统功能',
+            url: 'https://example.com/workitems/code-001',
+            kind: 'code',
+            attributes: {
+              repository: 'github.com/example/repo',
+              branch: 'main',
+              priority: 'high',
+              status: 'in-progress',
+            },
+            favorite: false,
+            storage: {
+              records: [
+                {
+                  content: '20251204 开始代码审查工作，发现3个潜在问题',
+                  type: 'update',
+                  createdAt: '2025-12-04T10:00:00.000Z',
+                },
+              ],
+            },
+          }, null, 2),
+        },
+        {
+          value: 'task',
+          label: 'Task',
+          color: 'bg-green-100 text-green-700',
+          description: '用于任务管理',
+          example: JSON.stringify({
+            id: 'TASK-001',
+            title: '示例：任务管理项',
+            description: '这是一个任务类型的示例工作项',
+            url: 'https://example.com/workitems/task-001',
+            kind: 'task',
+            attributes: {
+              assignee: '张三',
+              dueDate: '2025-12-31',
+              priority: 'medium',
+              status: 'todo',
+            },
+            favorite: false,
+            storage: {
+              records: [
+                {
+                  content: '20251203 任务已分配给开发团队',
+                  type: 'update',
+                  createdAt: '2025-12-03T14:30:00.000Z',
+                },
+                {
+                  content: '20251204 开发进度50%，预计下周完成',
+                  type: 'update',
+                  createdAt: '2025-12-04T09:15:00.000Z',
+                },
+              ],
+            },
+          }, null, 2),
+        },
+        {
+          value: 'environment',
+          label: 'Environment',
+          color: 'bg-purple-100 text-purple-700',
+          description: '用于环境配置相关的工作项',
+          example: JSON.stringify({
+            id: 'ENV-001',
+            title: '示例：环境配置项',
+            description: '这是一个环境类型的示例工作项，用于管理开发环境配置',
+            url: 'https://example.com/workitems/env-001',
+            kind: 'environment',
+            attributes: {
+              environment: 'production',
+              region: 'cn-north-1',
+              status: 'active',
+              version: 'v1.2.3',
+            },
+            favorite: false,
+            storage: {
+              records: [],
+            },
+          }, null, 2),
+        },
+        {
+          value: 'knowledge',
+          label: 'Knowledge',
+          color: 'bg-yellow-100 text-yellow-700',
+          description: '用于知识文档管理',
+          example: JSON.stringify({
+            id: 'KNOW-001',
+            title: '示例：知识文档',
+            description: '这是一个知识类型的示例工作项，用于文档管理',
+            url: 'https://example.com/workitems/know-001',
+            kind: 'knowledge',
+            attributes: {
+              category: 'documentation',
+              version: '1.0',
+              author: '李四',
+              tags: ['guide', 'tutorial'],
+            },
+            favorite: true,
+            storage: {
+              records: [
+                {
+                  content: '20251201 创建初始文档结构',
+                  type: 'update',
+                  createdAt: '2025-12-01T08:00:00.000Z',
+                },
+                {
+                  content: '20251202 完成API文档编写',
+                  type: 'update',
+                  createdAt: '2025-12-02T16:45:00.000Z',
+                },
+                {
+                  content: '20251203 添加使用示例和最佳实践',
+                  type: 'update',
+                  createdAt: '2025-12-03T11:20:00.000Z',
+                },
+              ],
+            },
+          }, null, 2),
+        },
+      ];
+      fs.writeFileSync(kindsFile, JSON.stringify(defaultKinds, null, 2) + '\n', 'utf-8');
     }
   }
 }
@@ -324,6 +455,67 @@ app.post('/__log', (req, res) => {
 });
 
 // API: 保存 hooks 文件
+// API: 获取 kinds 配置
+app.get('/__data/kinds', (req, res) => {
+  try {
+    const kindsFile = path.join(dataDir, 'kind.json');
+    if (!fs.existsSync(kindsFile)) {
+      res.json([]);
+      return;
+    }
+    const content = fs.readFileSync(kindsFile, 'utf-8');
+    const kinds = JSON.parse(content || '[]');
+    res.json(kinds);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// API: 保存 kinds 配置
+app.post('/__data/kinds', (req, res) => {
+  try {
+    const body = req.body;
+    let json;
+
+    // 支持两种格式：JSON 对象或字符串
+    if (typeof body === 'string') {
+      json = JSON.parse(body);
+    } else {
+      json = body;
+    }
+
+    // 验证 kinds 格式
+    if (!Array.isArray(json)) {
+      throw new Error('kinds must be an array');
+    }
+
+    // 验证每个 kind 项
+    for (const kind of json) {
+      if (!kind || typeof kind !== 'object') {
+        throw new Error('kind must be object');
+      }
+      if (typeof kind.value !== 'string' || !kind.value.trim()) {
+        throw new Error('kind.value must be non-empty string');
+      }
+      if (typeof kind.label !== 'string' || !kind.label.trim()) {
+        throw new Error('kind.label must be non-empty string');
+      }
+      if (typeof kind.color !== 'string') {
+        throw new Error('kind.color must be string');
+      }
+    }
+
+    const kindsFile = path.join(dataDir, 'kind.json');
+    const tmpFile = kindsFile + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(json, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmpFile, kindsFile);
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post('/__hooks/save', (req, res) => {
   try {
     const body = req.body;

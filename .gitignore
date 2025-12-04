@@ -18,7 +18,7 @@ node_modules/
 logs/
 
 # 运行时数据（整个 data 目录）
-data/
+data_local/
 
 # 系统文件
 .DS_Store

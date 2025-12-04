@@ -1,0 +1,30 @@
+[
+  {
+    "value": "code",
+    "label": "Code",
+    "color": "bg-blue-100 text-blue-700",
+    "description": "用于代码相关的工作项",
+    "example": "{\n  \"id\": \"CODE-001\",\n  \"title\": \"示例：代码审查任务\",\n  \"description\": \"这是一个代码类型的示例工作项，用于演示系统功能\",\n  \"url\": \"https://example.com/workitems/code-001\",\n  \"kind\": \"code\",\n  \"attributes\": {\n    \"repository\": \"github.com/example/repo\",\n    \"branch\": \"main\",\n    \"priority\": \"high\",\n    \"status\": \"in-progress\"\n  },\n  \"favorite\": false,\n  \"storage\": {\n    \"records\": [\n      {\n        \"content\": \"20251204 开始代码审查工作，发现3个潜在问题\",\n        \"type\": \"update\",\n        \"createdAt\": \"2025-12-04T10:00:00.000Z\"\n      }\n    ]\n  }\n}"
+  },
+  {
+    "value": "task",
+    "label": "Task",
+    "color": "bg-green-100 text-green-700",
+    "description": "用于任务管理",
+    "example": "{\n  \"id\": \"TASK-001\",\n  \"title\": \"示例：任务管理项\",\n  \"description\": \"这是一个任务类型的示例工作项\",\n  \"url\": \"https://example.com/workitems/task-001\",\n  \"kind\": \"task\",\n  \"attributes\": {\n    \"assignee\": \"张三\",\n    \"dueDate\": \"2025-12-31\",\n    \"priority\": \"medium\",\n    \"status\": \"todo\"\n  },\n  \"favorite\": false,\n  \"storage\": {\n    \"records\": [\n      {\n        \"content\": \"20251203 任务已分配给开发团队\",\n        \"type\": \"update\",\n        \"createdAt\": \"2025-12-03T14:30:00.000Z\"\n      },\n      {\n        \"content\": \"20251204 开发进度50%，预计下周完成\",\n        \"type\": \"update\",\n        \"createdAt\": \"2025-12-04T09:15:00.000Z\"\n      }\n    ]\n  }\n}"
+  },
+  {
+    "value": "environment",
+    "label": "Environment",
+    "color": "bg-purple-100 text-purple-700",
+    "description": "用于环境配置相关的工作项",
+    "example": "{\n  \"id\": \"ENV-001\",\n  \"title\": \"示例：环境配置项\",\n  \"description\": \"这是一个环境类型的示例工作项，用于管理开发环境配置\",\n  \"url\": \"https://example.com/workitems/env-001\",\n  \"kind\": \"environment\",\n  \"attributes\": {\n    \"environment\": \"production\",\n    \"region\": \"cn-north-1\",\n    \"status\": \"active\",\n    \"version\": \"v1.2.3\"\n  },\n  \"favorite\": false,\n  \"storage\": {\n    \"records\": []\n  }\n}"
+  },
+  {
+    "value": "knowledge",
+    "label": "Knowledge",
+    "color": "bg-yellow-100 text-yellow-700",
+    "description": "用于知识文档管理",
+    "example": "{\n  \"id\": \"KNOW-001\",\n  \"title\": \"示例：知识文档\",\n  \"description\": \"这是一个知识类型的示例工作项，用于文档管理\",\n  \"url\": \"https://example.com/workitems/know-001\",\n  \"kind\": \"knowledge\",\n  \"attributes\": {\n    \"category\": \"documentation\",\n    \"version\": \"1.0\",\n    \"author\": \"李四\",\n    \"tags\": [\"guide\", \"tutorial\"]\n  },\n  \"favorite\": true,\n  \"storage\": {\n    \"records\": [\n      {\n        \"content\": \"20251201 创建初始文档结构\",\n        \"type\": \"update\",\n        \"createdAt\": \"2025-12-01T08:00:00.000Z\"\n      },\n      {\n        \"content\": \"20251202 完成API文档编写\",\n        \"type\": \"update\",\n        \"createdAt\": \"2025-12-02T16:45:00.000Z\"\n      },\n      {\n        \"content\": \"20251203 添加使用示例和最佳实践\",\n        \"type\": \"update\",\n        \"createdAt\": \"2025-12-03T11:20:00.000Z\"\n      }\n    ]\n  }\n}"
+  }
+]

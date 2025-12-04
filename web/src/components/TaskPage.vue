@@ -491,7 +491,7 @@ function getTypeColor(type?: string): string {
                   <DropdownMenuTrigger :as-child="true">
                     <Button variant="ghost" size="sm" class="h-8 w-8 p-0">
                       <icon-lucide-more-horizontal class="h-4 w-4" />
-                    </Button>
+                </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem @click="() => handleRunHookByName(h.name)" :disabled="runningNames.has(h.name || '')">

@@ -3,9 +3,42 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useWorkitems } from '@/composables/useWorkitems'
 import type { WorkItem } from '@/types/workitem'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import DataFacetedFilter from '@/components/DataFacetedFilter.vue'
 
-const { allItems, loading, error, reload, kindFilter } = useWorkitems()
+const { allItems, loading, error, reload, keyword } = useWorkitems()
+
+// 类型筛选（多选）
+const selectedKindFilters = ref<string[]>([])
+
+// 计算每个类型的数量（基于应用关键词搜索后的数据，但不包括类型筛选）
+const kindOptions = computed(() => {
+  // 先应用关键词搜索（但不应用类型筛选）
+  let filtered = [...allItems.value]
+  const k = keyword.value.trim().toLowerCase()
+  if (k) {
+    filtered = filtered.filter((it) =>
+      [it.title, it.description].some((f) => (f || '').toLowerCase().includes(k)),
+    )
+  }
+
+  // 统计每个类型的数量（基于有记录的 workitems）
+  const counts: Record<string, number> = {}
+  for (const item of filtered) {
+    if (!item.storage?.records || !Array.isArray(item.storage.records) || item.storage.records.length === 0) {
+      continue
+    }
+    const kind = item.kind
+    if (!kind) continue
+    counts[kind] = (counts[kind] || 0) + 1
+  }
+
+  return [
+    { label: 'Code', value: 'code', count: counts.code || 0 },
+    { label: 'Task', value: 'task', count: counts.task || 0 },
+    { label: 'Environment', value: 'environment', count: counts.environment || 0 },
+    { label: 'Knowledge', value: 'knowledge', count: counts.knowledge || 0 },
+  ]
+})
 
 // 记录类型定义
 interface ActivityRecord {
@@ -62,9 +95,9 @@ const groupedRecords = computed(() => {
 
   // 遍历所有 workitems，提取 records
   for (const item of allItems.value) {
-    // 按类别筛选
-    if (kindFilter.value !== '') {
-      if (item.kind !== kindFilter.value) continue
+    // 按类别筛选（多选）
+    if (selectedKindFilters.value.length > 0) {
+      if (!item.kind || !selectedKindFilters.value.includes(item.kind)) continue
     }
 
     if (!item.storage?.records || !Array.isArray(item.storage.records)) continue
@@ -133,39 +166,18 @@ onUnmounted(() => {
         <p class="text-sm text-muted-foreground mt-1">变更记录（最近 10 天）</p>
       </div>
 
-      <!-- 顶部标签页导航 -->
-      <div class="mb-4">
-        <Tabs v-model:modelValue="kindFilter" class="w-full">
-          <TabsList class="inline-flex h-9 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground">
-            <TabsTrigger value="">
-              <icon-lucide-grid class="w-4 h-4 mr-2" />
-              全部
-            </TabsTrigger>
-            <TabsTrigger value="code">
-              <icon-lucide-code class="w-4 h-4 mr-2" />
-              Code
-            </TabsTrigger>
-            <TabsTrigger value="task">
-              <icon-lucide-check-square class="w-4 h-4 mr-2" />
-              Task
-            </TabsTrigger>
-            <TabsTrigger value="environment">
-              <icon-lucide-server class="w-4 h-4 mr-2" />
-              Environment
-            </TabsTrigger>
-            <TabsTrigger value="knowledge">
-              <icon-lucide-book-open class="w-4 h-4 mr-2" />
-              Knowledge
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
-      <!-- 刷新按钮 -->
-      <div class="mb-4 flex items-center gap-3">
-        <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="reload">
-          <icon-lucide-refresh-ccw class="w-4 h-4" />
-        </Button>
+      <!-- 筛选控制 -->
+      <div class="mb-4 flex items-center gap-2">
+        <DataFacetedFilter
+          title="类型"
+          :options="kindOptions"
+          v-model="selectedKindFilters"
+        />
+        <div class="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="reload">
+            <icon-lucide-refresh-ccw class="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <div v-if="loading">加载中…</div>

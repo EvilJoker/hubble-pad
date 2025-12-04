@@ -9,7 +9,7 @@
 ## 目标与非目标
 - 目标：
   - 统一映射为 `WorkItem` 最小字段集：`id`、`title`、`description`、`url`、`kind?`、`attributes?`。
-  - 通过前端以 URL Query `?kind=` 进行筛选展示；不改写数据文件。
+  - 在前端通过可视化筛选组件（Tabs、分面筛选器、多选分面过滤等）按 `kind` 进行过滤展示；不改写数据文件。
   - 支持四种首批 kind：`code` | `task` | `environment` | `knowledge`。
 - 非目标：
   - 不做平台功能复制（如 PR 审阅、流水线详情等）。

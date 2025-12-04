@@ -1,0 +1,101 @@
+[
+  {
+    "id": "EXAMPLE-001",
+    "title": "示例：代码审查任务",
+    "description": "这是一个代码类型的示例工作项，用于演示系统功能",
+    "url": "https://example.com/workitems/001",
+    "kind": "code",
+    "attributes": {
+      "priority": "high",
+      "status": "in-progress"
+    },
+    "favorite": true,
+    "storage": {
+      "records": [
+        {
+          "content": "20251204 开始代码审查工作，发现3个潜在问题",
+          "type": "update",
+          "createdAt": "2025-12-04T10:00:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "EXAMPLE-002",
+    "title": "示例：任务管理项",
+    "description": "这是一个任务类型的示例工作项",
+    "url": "https://example.com/workitems/002",
+    "kind": "task",
+    "attributes": {
+      "assignee": "张三",
+      "dueDate": "2025-12-31"
+    },
+    "storage": {
+      "records": [
+        {
+          "content": "20251203 任务已分配给开发团队",
+          "type": "update",
+          "createdAt": "2025-12-03T14:30:00.000Z"
+        },
+        {
+          "content": "20251204 开发进度50%，预计下周完成",
+          "type": "update",
+          "createdAt": "2025-12-04T09:15:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "EXAMPLE-003",
+    "title": "示例：环境配置项",
+    "description": "这是一个环境类型的示例工作项，用于管理开发环境配置",
+    "url": "https://example.com/workitems/003",
+    "kind": "environment",
+    "attributes": {
+      "environment": "production",
+      "region": "cn-north-1"
+    }
+  },
+  {
+    "id": "EXAMPLE-004",
+    "title": "示例：知识文档",
+    "description": "这是一个知识类型的示例工作项，用于文档管理",
+    "url": "https://example.com/workitems/004",
+    "kind": "knowledge",
+    "attributes": {
+      "category": "documentation",
+      "version": "1.0"
+    },
+    "favorite": true,
+    "storage": {
+      "records": [
+        {
+          "content": "20251201 创建初始文档结构",
+          "type": "update",
+          "createdAt": "2025-12-01T08:00:00.000Z"
+        },
+        {
+          "content": "20251202 完成API文档编写",
+          "type": "update",
+          "createdAt": "2025-12-02T16:45:00.000Z"
+        },
+        {
+          "content": "20251203 添加使用示例和最佳实践",
+          "type": "update",
+          "createdAt": "2025-12-03T11:20:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "EXAMPLE-005",
+    "title": "示例：另一个代码任务",
+    "description": "这是另一个代码类型的示例，展示多个同类型工作项",
+    "url": "https://example.com/workitems/005",
+    "kind": "code",
+    "attributes": {
+      "repository": "github.com/example/repo",
+      "branch": "main"
+    }
+  }
+]

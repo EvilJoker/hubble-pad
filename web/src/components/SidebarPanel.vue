@@ -74,11 +74,28 @@ onMounted(() => {
           <SidebarSeparator />
         </SidebarMenu>
 
-        <!-- Common group: contains Data and Task -->
+        <!-- Common group: contains Kind, Data, Task and Activity -->
         <SidebarGroup>
           <SidebarGroupLabel>Common</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <!-- Kind item -->
+              <SidebarMenuItem>
+                <TooltipProvider>
+                  <Tooltip :delayDuration="100">
+                    <TooltipTrigger as-child>
+                      <SidebarMenuButton as-child>
+                        <a href="#/kind" @click.prevent="emits('navigate', '/kind')" class="flex items-center gap-2 pl-3">
+                          <icon-lucide-tag class="w-4 h-4" />
+                          <span>Kind</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent class="z-50">管理 workitem 类型</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </SidebarMenuItem>
+
               <!-- Data item -->
               <SidebarMenuItem>
                 <TooltipProvider>
