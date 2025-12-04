@@ -188,6 +188,142 @@ export default defineConfig({
           }
         })
 
+        // dev only delete endpoint
+        // Note: mount without trailing slash so both '/__data/delete' and '/__data/delete/:id' work
+        server.middlewares.use('/__data/delete', async (req, res, next) => {
+          if (req.method !== 'POST') return next()
+          try {
+            const url = req.url || ''
+            const id = decodeURIComponent(url.replace(/^\//, ''))
+            if (!id) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'id is required' }))
+              return
+            }
+
+            const target = path.join(dataDir, 'workitems.json')
+            if (!fs.existsSync(target)) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems.json not found' }))
+              return
+            }
+
+            const content = fs.readFileSync(target, 'utf-8')
+            const workitems = JSON.parse(content || '[]')
+            if (!Array.isArray(workitems)) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems must be an array' }))
+              return
+            }
+
+            const before = workitems.length
+            const nextList = workitems.filter((it: any) => !it || typeof it !== 'object' ? false : it.id !== id)
+            const after = nextList.length
+
+            if (before === after) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: `WorkItem with id "${id}" not found` }))
+              return
+            }
+
+            const tmpFile = target + '.tmp'
+            fs.writeFileSync(tmpFile, JSON.stringify(nextList, null, 2) + '\n', 'utf-8')
+            fs.renameSync(tmpFile, target)
+
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true, deleted: before - after }))
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+          }
+        })
+
+        // dev only add-record endpoint
+        // Note: mount without trailing slash so both '/__data/add-record' and '/__data/add-record/:id' work
+        server.middlewares.use('/__data/add-record', async (req, res, next) => {
+          if (req.method !== 'POST') return next()
+          try {
+            const url = req.url || ''
+            const id = decodeURIComponent(url.replace(/^\//, ''))
+            if (!id) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'id is required' }))
+              return
+            }
+
+            const chunks: Buffer[] = []
+            await new Promise<void>((resolve, reject) => {
+              req.on('data', (c) => chunks.push(Buffer.from(c)))
+              req.on('end', () => resolve())
+              req.on('error', (e) => reject(e))
+            })
+            const raw = Buffer.concat(chunks).toString('utf-8')
+            const body = JSON.parse(raw || '{}')
+            const record = (body as any).record
+
+            if (!record || typeof record !== 'object' || typeof record.content !== 'string') {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'record.content must be string' }))
+              return
+            }
+
+            const target = path.join(dataDir, 'workitems.json')
+            if (!fs.existsSync(target)) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems.json not found' }))
+              return
+            }
+
+            const content = fs.readFileSync(target, 'utf-8')
+            const workitems = JSON.parse(content || '[]')
+            if (!Array.isArray(workitems)) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems must be an array' }))
+              return
+            }
+
+            const item = workitems.find((it: any) => it && it.id === id)
+            if (!item) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: `WorkItem with id "${id}" not found` }))
+              return
+            }
+
+            // 确保 storage.records 存在
+            if (!item.storage) item.storage = {}
+            if (!Array.isArray(item.storage.records)) item.storage.records = []
+
+            const recordWithTime = {
+              ...record,
+              createdAt: record.createdAt || new Date().toISOString(),
+            }
+            item.storage.records.push(recordWithTime)
+
+            const tmpFile = target + '.tmp'
+            fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8')
+            fs.renameSync(tmpFile, target)
+
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true, record: recordWithTime }))
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+          }
+        })
+
         // unified log endpoint
         server.middlewares.use('/__log', async (req, res, next) => {
           if (req.method !== 'POST') return next()

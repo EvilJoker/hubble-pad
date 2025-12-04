@@ -256,6 +256,43 @@ app.post('/__data/add-record/:id', (req, res) => {
   }
 });
 
+// API: 删除指定 workitem（按 id）
+app.post('/__data/delete/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ ok: false, message: 'id is required' });
+    }
+
+    const target = path.join(dataDir, 'workitems.json');
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ ok: false, message: 'workitems.json not found' });
+    }
+
+    const content = fs.readFileSync(target, 'utf-8');
+    const workitems = JSON.parse(content || '[]');
+    if (!Array.isArray(workitems)) {
+      return res.status(400).json({ ok: false, message: 'workitems must be an array' });
+    }
+
+    const before = workitems.length;
+    const next = workitems.filter((it) => !it || typeof it !== 'object' ? false : it.id !== id);
+    const after = next.length;
+
+    if (before === after) {
+      return res.status(404).json({ ok: false, message: `WorkItem with id "${id}" not found` });
+    }
+
+    const tmpFile = target + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(next, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmpFile, target);
+
+    return res.json({ ok: true, deleted: before - after });
+  } catch (error) {
+    return res.status(500).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // API: 获取 hooks 列表
 app.get('/__hooks/list', (req, res) => {
   try {

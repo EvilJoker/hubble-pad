@@ -22,7 +22,10 @@
           "items": {
             "type": "object",
             "properties": {
-              "content": { "type": "string" },
+              "content": {
+                "type": "string",
+                "description": "记录内容，必须以有效的 8 位日期（YYYYMMDD）开头，长度在 20-500 字符之间"
+              },
               "type": { "type": "string" },
               "createdAt": { "type": "string", "format": "date-time" }
             },

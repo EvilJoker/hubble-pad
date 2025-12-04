@@ -19,6 +19,14 @@ const saving = ref(false)
 const saveError = ref<string | null>(null)
 const editingItemId = ref<string | null>(null)
 
+// 添加记录相关状态
+const recordDialogOpen = ref(false)
+const recordContent = ref('')
+const recordItemId = ref<string | null>(null)
+const recordItemTitle = ref('')
+const recordError = ref<string | null>(null)
+const addingRecord = ref(false)
+
 function handleEdit(item: { id: string }) {
   editingItemId.value = item.id
   fetch('/data/workitems.json', { cache: 'no-store' })
@@ -95,6 +103,128 @@ async function saveEditor() {
     alert('发生未知错误：' + msg)
   } finally {
     saving.value = false
+  }
+}
+
+async function handleDelete(item: { id: string; title?: string }) {
+  const name = item.title || item.id
+  const ok = window.confirm(`确定要删除该条目吗？\n\n${name}`)
+  if (!ok) return
+
+  try {
+    const res = await fetch(`/__data/delete/${encodeURIComponent(item.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const data = await res.json().catch(() => ({ ok: false }))
+    if (!res.ok || !data.ok) {
+      const msg = (data && (data as any).message) ? (data as any).message : `HTTP ${res.status}`
+      alert('删除失败：' + msg)
+      return
+    }
+    // 删除成功后刷新列表
+    await reload()
+    window.dispatchEvent(new CustomEvent('workitems-updated'))
+  } catch (e) {
+    const msg = (e as Error).message
+    alert('删除失败：' + msg)
+  }
+}
+
+function closeRecordDialog() {
+  recordDialogOpen.value = false
+  recordContent.value = ''
+  recordItemId.value = null
+  recordItemTitle.value = ''
+  recordError.value = null
+}
+
+function handleAddRecord(item: { id: string; title?: string }) {
+  recordItemId.value = item.id
+  recordItemTitle.value = item.title || item.id || ''
+  recordContent.value = '' // 使用空值，让 placeholder 显示
+  recordError.value = null
+  recordDialogOpen.value = true
+}
+
+// 工具函数：生成当前日期的 YYYYMMDD 格式
+function getCurrentDatePrefix(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}${m}${d}`
+}
+
+// 工具函数：验证日期前缀是否有效（YYYYMMDD 格式且为有效日期）
+function isValidDatePrefix(str: string): boolean {
+  if (!/^\d{8}/.test(str)) return false
+  const y = parseInt(str.slice(0, 4), 10)
+  const m = parseInt(str.slice(4, 6), 10)
+  const d = parseInt(str.slice(6, 8), 10)
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false
+  const date = new Date(y, m - 1, d)
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
+}
+
+function getRecordPlaceholder(): string {
+  const datePrefix = getCurrentDatePrefix()
+  const defaultLabel = recordItemTitle.value || ''
+  return `${datePrefix} <内容>（必须以 YYYYMMDD 开头，且不少于 20 个字）`
+}
+
+async function saveRecord() {
+  if (addingRecord.value) return
+
+  const value = recordContent.value.trim()
+  recordError.value = null
+
+  // 格式校验
+  if (value.length < 20) {
+    recordError.value = '格式错误：内容总长度不少于 20 个字符。'
+    return
+  }
+  if (value.length > 500) {
+    recordError.value = '格式错误：内容总长度不能超过 500 个字符。'
+    return
+  }
+  if (!isValidDatePrefix(value)) {
+    recordError.value = '格式错误：内容必须以有效的 8 位日期（YYYYMMDD）开头。'
+    return
+  }
+
+  if (!recordItemId.value) {
+    recordError.value = '错误：缺少工作项 ID'
+    return
+  }
+
+  addingRecord.value = true
+  try {
+    const res = await fetch(`/__data/add-record/${encodeURIComponent(recordItemId.value)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        record: {
+          content: value,
+          type: 'manual',
+        },
+      }),
+    })
+    const data = await res.json().catch(() => ({ ok: false }))
+    if (!res.ok || !data.ok) {
+      const msg = (data && (data as any).message) ? (data as any).message : `HTTP ${res.status}`
+      recordError.value = '添加记录失败：' + msg
+      return
+    }
+    // 添加记录成功后关闭对话框并刷新
+    closeRecordDialog()
+    await reload()
+    window.dispatchEvent(new CustomEvent('workitems-updated'))
+  } catch (e) {
+    const msg = (e as Error).message
+    recordError.value = '添加记录失败：' + msg
+  } finally {
+    addingRecord.value = false
   }
 }
 
@@ -184,7 +314,10 @@ onUnmounted(() => {
           <template v-for="(it, idx) in items" :key="it.id">
             <WorkItemRow
               :item="it"
+              :index="idx"
               @edit="handleEdit"
+              @delete="handleDelete"
+              @add-record="handleAddRecord"
             />
             <ItemSeparator v-if="idx < items.length - 1" />
           </template>
@@ -204,6 +337,30 @@ onUnmounted(() => {
         </div>
         <DialogFooter>
           <Button type="button" @click="saveEditor" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 添加记录对话框 -->
+    <Dialog v-model:open="recordDialogOpen">
+      <DialogContent class="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>更新进展 - {{ recordItemTitle }}</DialogTitle>
+        </DialogHeader>
+        <div>
+          <Textarea
+            v-model="recordContent"
+            :placeholder="getRecordPlaceholder()"
+            class="min-h-32"
+            :maxlength="500"
+          />
+          <p v-if="recordError" class="text-red-600 mt-2 text-sm">{{ recordError }}</p>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" @click="closeRecordDialog">取消</Button>
+          <Button type="button" @click="saveRecord" :disabled="addingRecord">
+            {{ addingRecord ? '保存中…' : '保存' }}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

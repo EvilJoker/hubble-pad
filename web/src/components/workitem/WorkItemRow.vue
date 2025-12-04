@@ -5,8 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Item, ItemHeader, ItemContent, ItemTitle, ItemDescription, ItemActions } from '@/components/ui/item'
 
-const props = defineProps<{ item: WorkItem }>()
-const emit = defineEmits<{ (e: 'edit', item: WorkItem): void; (e: 'open', item: WorkItem): void }>()
+const props = defineProps<{ item: WorkItem; index?: number }>()
+const emit = defineEmits<{
+  (e: 'edit', item: WorkItem): void;
+  (e: 'open', item: WorkItem): void;
+  (e: 'delete', item: WorkItem): void;
+  (e: 'add-record', item: WorkItem): void;
+}>()
 
 const isFavorite = ref(props.item.favorite === true)
 const toggling = ref(false)
@@ -22,6 +27,12 @@ function onEdit() {
 function onOpen() {
   // 允许父层拦截或统计
   emit('open', props.item)
+}
+function onDelete() {
+  emit('delete', props.item)
+}
+function onAddRecord() {
+  emit('add-record', props.item)
 }
 
 async function toggleFavorite() {
@@ -69,11 +80,16 @@ const displayDescription = computed(() => truncateMiddle(props.item.description,
 <template>
   <Item size="sm" class="bg-white">
     <ItemHeader class="items-start">
+      <!-- 左侧序号，仅用于当前列表展示，不写入数据 -->
+      <div class="w-8 text-xs text-gray-400 flex items-start justify-end pr-2 select-none">
+        <span>{{ (props.index ?? 0) + 1 }}</span>
+      </div>
       <ItemContent class="min-w-0 flex-1 overflow-hidden">
-        <a :href="item.url" target="_blank" class="block min-w-0" @click="onOpen">
+        <!-- 仅展示文本，不做默认跳转；跳转由右侧按钮负责 -->
+        <div class="block min-w-0 cursor-default select-text">
           <ItemTitle class="block" :title="item.title">{{ displayTitle }}</ItemTitle>
           <ItemDescription class="block" :title="item.description">{{ displayDescription }}</ItemDescription>
-        </a>
+        </div>
       </ItemContent>
       <ItemActions class="whitespace-nowrap gap-1 shrink-0">
         <TooltipProvider>
@@ -105,13 +121,44 @@ const displayDescription = computed(() => truncateMiddle(props.item.description,
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger as-child>
-              <a :href="item.url" target="_blank" aria-label="打开链接">
+              <a :href="item.url" target="_blank" aria-label="打开链接" @click="onOpen">
                 <Button variant="ghost" size="icon-sm">
                   <icon-lucide-external-link class="w-4 h-4" />
                 </Button>
               </a>
             </TooltipTrigger>
             <TooltipContent class="z-50">{{ item.url }}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="删除"
+                class="text-red-500 hover:text-red-600"
+                @click="onDelete"
+              >
+                <icon-lucide-trash-2 class="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent class="z-50">删除</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="更新进展"
+                @click="onAddRecord"
+              >
+                <icon-lucide-clipboard-plus class="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent class="z-50">更新进展</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </ItemActions>
