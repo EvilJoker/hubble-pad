@@ -6,4 +6,11 @@ export interface WorkItem {
   kind?: string
   favorite?: boolean
   attributes?: Record<string, unknown>
+  storage?: {
+    records?: Array<{
+      content: string
+      type?: string
+      createdAt?: string
+    }>
+  }
 }

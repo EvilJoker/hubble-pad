@@ -70,7 +70,17 @@ export function useWorkitems() {
       logger.info('workitems.load.start')
       const res = await fetch('/data/workitems.json', { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      allItems.value = await res.json()
+      const contentType = res.headers.get('content-type')
+      if (contentType && !contentType.includes('application/json')) {
+        // 如果返回的不是 JSON，可能是 HTML 错误页面
+        const text = await res.text()
+        if (text.trim().startsWith('<!')) {
+          throw new Error('Received HTML instead of JSON. File may not exist.')
+        }
+        throw new Error(`Unexpected content type: ${contentType}`)
+      }
+      const data = await res.json()
+      allItems.value = Array.isArray(data) ? data : []
       logger.info('workitems.load.success', { count: allItems.value.length })
     } catch (e: unknown) {
       error.value = (e as Error).message

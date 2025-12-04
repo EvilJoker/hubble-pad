@@ -129,6 +129,23 @@ onMounted(() => {
                   </Tooltip>
                 </TooltipProvider>
               </SidebarMenuItem>
+
+              <!-- Activity item -->
+              <SidebarMenuItem>
+                <TooltipProvider>
+                  <Tooltip :delayDuration="100">
+                    <TooltipTrigger as-child>
+                      <SidebarMenuButton as-child>
+                        <a href="#/activity" @click.prevent="emits('navigate', '/activity')" class="flex items-center gap-2 pl-3">
+                          <icon-lucide-activity class="w-4 h-4" />
+                          <span>Activity</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent class="z-50">变更记录（最近 10 天）</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

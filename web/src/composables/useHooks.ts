@@ -7,6 +7,8 @@ export interface HookItem {
   cmd: string
   cwd?: string
   enabled: boolean
+  type?: 'update' | 'auto' // 任务类型：update=更新信息类, auto=自动化类
+  schedule?: string | null // 定时设置，cron 表达式或间隔时间（如 "*/5 * * * *" 或 "300000" 毫秒），null 表示不定时
   lastRunAt?: string | null
   lastError?: string | null
 }

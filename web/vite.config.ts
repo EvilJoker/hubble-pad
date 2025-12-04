@@ -65,7 +65,18 @@ export default defineConfig({
           const filePath = path.join(dataDir, rel)
           try {
             if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+              // 设置正确的 Content-Type
+              if (filePath.endsWith('.json')) {
+                res.setHeader('Content-Type', 'application/json')
+              }
               fs.createReadStream(filePath).pipe(res)
+              return
+            }
+            // 如果文件不存在，对于 JSON 文件返回空数组，避免返回 HTML
+            if (rel.endsWith('.json')) {
+              res.setHeader('Content-Type', 'application/json')
+              res.statusCode = 200
+              res.end('[]')
               return
             }
           } catch {
@@ -450,44 +461,7 @@ export default defineConfig({
           fs.writeFileSync(hooksFile, JSON.stringify(arr, null, 2) + '\n', 'utf-8')
         }
 
-        server.middlewares.use('/__hooks/run-all', async (req, res, next) => {
-          if (req.method !== 'POST') return next()
-          try {
-            const arr = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'))
-            const enabledIdx = arr.map((h: any, i: number) => (h && h.enabled ? i : -1)).filter((i: number) => i >= 0)
-            // 并发执行脚本，收集结果（不合并）
-            const execResults = await Promise.allSettled(enabledIdx.map((i: number) => execHookByIndex(i)))
-            // 串行合并：从上到下，跳过失败，仅合并一次
-            let added = 0, updated = 0
-            const details: any[] = []
-            for (let k = 0; k < enabledIdx.length; k++) {
-              const i = enabledIdx[k]
-              const r = execResults[k]
-              const nowISO = new Date().toISOString()
-              if (r.status === 'fulfilled' && r.value.ok) {
-                const items = Array.isArray(r.value.items) ? r.value.items : []
-                // 合并前最小校验
-                const filtered = items.filter((x: any) => validateWorkitemMinimal(x))
-                const mr = mergeItemsFrom(i, nowISO, filtered)
-                updateHookStatus(i, nowISO, true, null)
-                added += mr.added; updated += mr.updated
-                appendLog({ level: 'info', message: 'hooks.run_all.merged', index: i, added: mr.added, updated: mr.updated })
-                details.push({ index: i, ok: true, added: mr.added, updated: mr.updated, items: filtered })
-              } else {
-                const reason = r.status === 'rejected' ? String(r.reason) : (r.value?.error || 'Hook failed')
-                appendLog({ level: 'error', message: 'hooks.run_all.failed', index: i, reason })
-                updateHookStatus(i, nowISO, false, reason)
-                details.push({ index: i, ok: false, error: reason })
-              }
-            }
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ ok: true, added, updated, results: details }))
-          } catch (e) {
-            console.error('[hooks] run-all error', e)
-            res.statusCode = 500
-            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
-          }
-        })
+        // run-all API removed - use individual task scheduling instead
 
         server.middlewares.use('/__hooks/run/', async (req, res, next) => {
           if (req.method !== 'POST') return next()

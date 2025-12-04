@@ -358,14 +358,19 @@ app.post('/__hooks/run/:name', async (req, res) => {
 
     const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
     let hook = null;
+    let hookIndex = -1;
     if (Array.isArray(hooks)) {
       // 兼容两种调用：按名称或按索引
       const idx = Number(name);
       if (!Number.isNaN(idx)) {
         hook = hooks[idx];
+        hookIndex = idx;
       }
       if (!hook) {
-        hook = hooks.find(h => h && h.name === name) || null;
+        hookIndex = hooks.findIndex(h => h && h.name === name);
+        if (hookIndex >= 0) {
+          hook = hooks[hookIndex];
+        }
       }
     }
 
@@ -377,204 +382,183 @@ app.post('/__hooks/run/:name', async (req, res) => {
       return res.status(400).json({ error: `Hook "${name}" is disabled` });
     }
 
-    // 执行 hook 命令
-    const { exec } = require('child_process');
-    const cmd = hook.cmd;
-    const cwd = hook.cwd ? path.resolve(rootDir, hook.cwd) : rootDir;
-
-    exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
-      // 更新 hook 状态
-      const updatedHooks = hooks.map((h, i) => {
-        const isTarget = (h && h.name === name) || (i === Number(name));
-        if (isTarget) {
-          return {
-            ...h,
-            lastRunAt: new Date().toISOString(),
-            lastError: error ? (stderr || error.message) : null
-          };
-        }
-        return h;
-      });
-      fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8');
-
-      if (error) {
-        return res.status(500).json({ error: error.message, stderr });
-      }
-
-      // 解析脚本输出并合并到 workitems.json（与 dev 环境保持一致）
-      let parsed;
-      try {
-        const out = String(stdout || '').trim();
-        const match = out.match(/\{[\s\S]*\}$/); // 允许前后有其他输出
-        parsed = JSON.parse(match ? match[0] : out);
-      } catch (e) {
-        return res.json({ ok: true, merged: false, message: 'Output is not valid JSON', stdout });
-      }
-
-      const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
-      const items = Array.isArray(parsed?.items) ? parsed.items : [];
-      if (!ok || items.length === 0) {
-        return res.json({ ok: true, merged: false, count: items.length, stdout });
-      }
-
-      // 最小校验，并规范化 id
-      const filtered = items
-        .filter((it) => it && typeof it === 'object'
-          && typeof it.title === 'string'
-          && typeof it.description === 'string'
-          && typeof it.url === 'string')
-        .map((it) => {
-          const next = Object.assign({}, it);
-          next.id = normalizeWorkitemId(
-            it,
-            `hook:${hook?.name || name}:${String(it.id || '')}:${String(it.url || '')}`,
-          );
-          return next;
-        });
-
-      try {
-        const workitemsFile = path.join(dataDir, 'workitems.json');
-        const exists = fs.existsSync(workitemsFile) ? fs.readFileSync(workitemsFile, 'utf-8') : '[]';
-        const current = JSON.parse(exists || '[]');
-        const map = new Map(current.map((x) => [x.id, x]));
-        const nowISO = new Date().toISOString();
-        let added = 0, updated = 0;
-        for (const it of filtered) {
-          const existing = map.get(it.id);
-          // 保留现有的 storage 字段（本地信息，外部系统不会携带）
-          const next = {
-            ...it,
-            source: `hook:${hook?.name || name}`,
-            updatedAt: nowISO,
-            // 如果已存在且有自己的 storage，则保留；否则不设置（让外部数据覆盖其他字段）
-            ...(existing && existing.storage ? { storage: existing.storage } : {}),
-          };
-          if (map.has(next.id)) updated++; else added++;
-          map.set(next.id, next);
-        }
-        const tmp = workitemsFile + '.tmp';
-        fs.writeFileSync(tmp, JSON.stringify(Array.from(map.values()), null, 2) + '\n', 'utf-8');
-        fs.renameSync(tmp, workitemsFile);
-        return res.json({ ok: true, merged: true, added, updated, count: filtered.length });
-      } catch (e) {
-        return res.json({ ok: true, merged: false, message: String(e?.message || e), count: filtered.length });
-      }
-    });
+    const result = await executeHook(hook, hookIndex);
+    if (result.ok) {
+      const count = Array.isArray(result.items) ? result.items.length : 0;
+      return res.json({ ok: true, merged: hook.type === 'update', count });
+    } else {
+      return res.status(500).json({ error: result.error, stderr: result.stderr });
+    }
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
-// API: 运行所有 hooks
-app.post('/__hooks/run-all', async (req, res) => {
-  try {
+// 定时任务调度器
+const scheduledTasks = new Map(); // 存储定时任务 ID
+
+// 执行单个 hook（内部函数，供定时任务和手动触发使用）
+async function executeHook(hook, hookIndex) {
+  return new Promise((resolve) => {
     const hooksFile = path.join(dataDir, 'hooks.json');
-    if (!fs.existsSync(hooksFile)) {
-      return res.status(404).json({ error: 'hooks.json not found' });
-    }
-
-    const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
-    const enabledIdx = (Array.isArray(hooks) ? hooks : [])
-      .map((h, i) => (h && h.enabled ? i : -1)).filter(i => i >= 0);
-
-    if (enabledIdx.length === 0) {
-      return res.json({ ok: true, message: 'No enabled hooks to run' });
-    }
-
     const { exec } = require('child_process');
+    const cmd = hook.cmd;
+    const cwd = hook.cwd ? path.resolve(rootDir, hook.cwd) : rootDir;
 
-    function execHookByIndex(i) {
-      return new Promise((resolve) => {
-        const h = hooks[i];
-        if (!h) return resolve({ ok: false, error: 'Hook not found' });
-        const cmd = h.cmd;
-        const cwd = h.cwd ? path.resolve(rootDir, h.cwd) : rootDir;
-        exec(cmd, { cwd, timeout: 300000 }, (error, stdout, stderr) => {
-          const nowISO = new Date().toISOString();
-          const updatedHooks = hooks.map((x, xi) => xi === i ? ({
+    exec(cmd, { cwd, timeout: 300000 }, async (error, stdout, stderr) => {
+      const nowISO = new Date().toISOString();
+      try {
+        const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
+        const updatedHooks = hooks.map((x, xi) => {
+          // 通过名称或索引匹配
+          const isTarget = (hookIndex >= 0 && xi === hookIndex) || (x && x.name === hook.name);
+          return isTarget ? {
             ...x,
             lastRunAt: nowISO,
             lastError: error ? (stderr || error?.message) : null,
-          }) : x);
-          try { fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8'); } catch {}
-          if (error) return resolve({ ok: false, error: error.message, stderr });
-
-          // 解析 JSON
-          let parsed;
-          try {
-            const out = String(stdout || '').trim();
-            const match = out.match(/\{[\s\S]*\}$/);
-            parsed = JSON.parse(match ? match[0] : out);
-          } catch (e) {
-            return resolve({ ok: true, items: [] });
-          }
-          const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
-          const items = Array.isArray(parsed?.items) ? parsed.items : [];
-          resolve({ ok, items });
+          } : x;
         });
-      });
-    }
+        fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8');
+      } catch (e) {
+        // 忽略更新错误
+      }
 
-    // 并发执行，串行合并
-    const results = await Promise.allSettled(enabledIdx.map((i) => execHookByIndex(i)));
-    let added = 0, updated = 0;
-    const details = [];
-    for (let k = 0; k < enabledIdx.length; k++) {
-      const i = enabledIdx[k];
-      const r = results[k];
-      const nowISO = new Date().toISOString();
-      if (r.status === 'fulfilled' && r.value.ok) {
-        const items = Array.isArray(r.value.items) ? r.value.items : [];
-        // 最小校验与合并，并规范化 id
-        const filtered = items
-          .filter((it) => it && typeof it === 'object'
-            && typeof it.title === 'string'
-            && typeof it.description === 'string'
-            && typeof it.url === 'string')
-          .map((it) => {
-            const next = Object.assign({}, it);
-            next.id = normalizeWorkitemId(
-              it,
-              `hook:${hooks[i]?.name || i}:${String(it.id || '')}:${String(it.url || '')}`,
-            );
-            return next;
-          });
+      if (error) {
+        return resolve({ ok: false, error: error.message, stderr });
+      }
+
+      // 解析 JSON
+      let parsed;
+      try {
+        const out = String(stdout || '').trim();
+        const match = out.match(/\{[\s\S]*\}$/);
+        parsed = JSON.parse(match ? match[0] : out);
+      } catch (e) {
+        return resolve({ ok: true, items: [] });
+      }
+
+      const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
+      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+
+      // 如果是更新信息类任务，合并到 workitems.json
+      if (ok && items.length > 0 && hook.type === 'update') {
         try {
           const workitemsFile = path.join(dataDir, 'workitems.json');
           const exists = fs.existsSync(workitemsFile) ? fs.readFileSync(workitemsFile, 'utf-8') : '[]';
           const current = JSON.parse(exists || '[]');
           const map = new Map(current.map((x) => [x.id, x]));
+          const filtered = items
+            .filter((it) => it && typeof it === 'object'
+              && typeof it.title === 'string'
+              && typeof it.description === 'string'
+              && typeof it.url === 'string')
+            .map((it) => {
+              const next = Object.assign({}, it);
+              next.id = normalizeWorkitemId(
+                it,
+                `hook:${hook?.name || hookIndex}:${String(it.id || '')}:${String(it.url || '')}`,
+              );
+              return next;
+            });
+
           for (const it of filtered) {
             const existing = map.get(it.id);
-            // 保留现有的 storage 字段（本地信息，外部系统不会携带）
             const next = {
               ...it,
-              source: `hook:${hooks[i]?.name || i}`,
+              source: `hook:${hook?.name || hookIndex}`,
               updatedAt: nowISO,
-              // 如果已存在且有自己的 storage，则保留；否则不设置（让外部数据覆盖其他字段）
               ...(existing && existing.storage ? { storage: existing.storage } : {}),
             };
-            if (map.has(next.id)) updated++; else added++;
             map.set(next.id, next);
           }
+
           const tmp = workitemsFile + '.tmp';
           fs.writeFileSync(tmp, JSON.stringify(Array.from(map.values()), null, 2) + '\n', 'utf-8');
           fs.renameSync(tmp, workitemsFile);
-          details.push({ index: i, ok: true, added, updated });
         } catch (e) {
-          details.push({ index: i, ok: false, error: String(e?.message || e) });
+          // 合并失败不影响任务执行结果
         }
-      } else {
-        const reason = r.status === 'rejected' ? String(r.reason) : (r.value?.error || 'Hook failed');
-        details.push({ index: i, ok: false, error: reason });
       }
-    }
 
-    res.json({ ok: true, added, updated, results: details });
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+      resolve({ ok, items });
+    });
+  });
+}
+
+// 启动定时任务调度
+function startScheduledTasks() {
+  const hooksFile = path.join(dataDir, 'hooks.json');
+  if (!fs.existsSync(hooksFile)) return;
+
+  try {
+    const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
+    if (!Array.isArray(hooks)) return;
+
+    // 清除所有现有定时任务
+    scheduledTasks.forEach((taskId) => clearInterval(taskId));
+    scheduledTasks.clear();
+
+    // 为每个启用的任务设置定时
+    hooks.forEach((hook, index) => {
+      if (!hook || !hook.enabled || !hook.schedule) return;
+
+      const schedule = hook.schedule.trim();
+      if (!schedule) return;
+
+      // 解析定时设置：支持毫秒间隔或 cron 表达式
+      let intervalMs = null;
+
+      // 尝试解析为数字（毫秒间隔）
+      const numSchedule = Number(schedule);
+      if (!Number.isNaN(numSchedule) && numSchedule > 0) {
+        intervalMs = numSchedule;
+      } else {
+        // 简单的 cron 表达式解析（仅支持 */N 格式，如 */5 表示每 5 分钟）
+        // 对于复杂的 cron，可以后续集成 node-cron 库
+        const cronMatch = schedule.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/); // */N * * * *
+        if (cronMatch) {
+          const minutes = parseInt(cronMatch[1], 10);
+          if (minutes > 0) {
+            intervalMs = minutes * 60 * 1000;
+          }
+        }
+      }
+
+      if (intervalMs && intervalMs > 0) {
+        const taskId = setInterval(async () => {
+          try {
+            await executeHook(hook, index);
+          } catch (e) {
+            console.error(`[scheduled task] Error executing hook ${hook.name}:`, e);
+          }
+        }, intervalMs);
+        scheduledTasks.set(`${hook.name}-${index}`, taskId);
+        console.log(`[scheduled task] Started task "${hook.name}" with interval ${intervalMs}ms`);
+      }
+    });
+  } catch (e) {
+    console.error('[scheduled task] Error loading hooks:', e);
   }
-});
+}
+
+// 监听 hooks.json 文件变化，重新加载定时任务
+let hooksFileWatcher = null;
+function watchHooksFile() {
+  const hooksFile = path.join(dataDir, 'hooks.json');
+  if (fs.existsSync(hooksFile)) {
+    try {
+      if (hooksFileWatcher) {
+        fs.unwatchFile(hooksFile);
+      }
+      fs.watchFile(hooksFile, { interval: 2000 }, () => {
+        console.log('[scheduled task] hooks.json changed, reloading scheduled tasks...');
+        startScheduledTasks();
+      });
+    } catch (e) {
+      // 忽略监听错误
+    }
+  }
+}
 
 // AI API 配置
 const AI_API_URL = process.env.AI_API_URL || 'https://studio.zte.com.cn/zte-studio-ai-platform/openapi/v1/chat';
@@ -688,6 +672,9 @@ app.listen(PORT, () => {
   console.log(`Hubble Pad server is running at http://localhost:${PORT}`);
   console.log(`Serving static files from: ${distDir}`);
   console.log(`Data directory: ${dataDir}`);
+  // 启动定时任务调度
+  startScheduledTasks();
+  watchHooksFile();
 });
 
 // 处理未捕获的错误

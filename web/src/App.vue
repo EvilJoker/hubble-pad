@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import SidebarPanel from '@/components/SidebarPanel.vue'
 import DataPage from '@/components/DataPage.vue'
 import TaskPage from '@/components/TaskPage.vue'
+import ActivityPage from '@/components/ActivityPage.vue'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -15,7 +16,7 @@ function handleNavigate(path: string) {
 
 function syncPathFromHash() {
   const hash = window.location.hash.slice(1) || '/data'
-  if (hash === '/data' || hash === '/task') {
+  if (hash === '/data' || hash === '/task' || hash === '/activity') {
     currentPath.value = hash
   } else {
     currentPath.value = '/data'
@@ -38,6 +39,8 @@ const currentComponent = computed(() => {
       return DataPage
     case '/task':
       return TaskPage
+    case '/activity':
+      return ActivityPage
     default:
       return DataPage
   }
