@@ -29,7 +29,12 @@ export default defineConfig({
     {
       name: 'data-dev-map',
       configureServer(server) {
-        const dataDir = path.resolve(__dirname, '../data')
+        // 开发环境的数据根目录：
+        // 优先使用环境变量 HUBBLE_PAD_DATA_DIR，其次使用仓库内的 data 目录
+        const envDataDir = process.env.HUBBLE_PAD_DATA_DIR
+        const dataDir = envDataDir && envDataDir.trim()
+          ? path.resolve(envDataDir)
+          : path.resolve(__dirname, '../data')
         const logDir = path.join(dataDir, 'logs')
         const logFile = path.join(logDir, 'dev.log')
         const repoRoot = path.resolve(__dirname, '..')

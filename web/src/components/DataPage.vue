@@ -85,7 +85,7 @@ function toggleRowSelection(itemId: string, checked: boolean) {
   }
 }
 
-// 排序后的列表
+// 排序后的列表（收藏始终排在前面）
 const items = computed(() => {
   let result = [...allItems.value]
 
@@ -103,7 +103,7 @@ const items = computed(() => {
     )
   }
 
-  // 应用排序
+  // 应用排序（先整体排序，再按收藏拆分，以保证收藏/非收藏各自内部仍按当前排序）
   if (dataSortKey.value && dataSortOrder.value) {
     result.sort((a, b) => {
       let aVal: any
@@ -136,7 +136,19 @@ const items = computed(() => {
     })
   }
 
-  return result
+  // 收藏始终排在前面：按收藏状态分组，但保留各自内部的相对顺序
+  const favorites: typeof result = []
+  const others: typeof result = []
+  for (const it of result) {
+    const isFavorite = favoriteStates.value.get(it.id) === true || it.favorite === true
+    if (isFavorite) {
+      favorites.push(it)
+    } else {
+      others.push(it)
+    }
+  }
+
+  return [...favorites, ...others]
 })
 
 function handleDataSort(key: DataSortKey) {
