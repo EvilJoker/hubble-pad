@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import { useHooks } from '@/composables/useHooks'
 import { ItemSeparator } from '@/components/ui/item'
 
@@ -173,12 +174,12 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
           <div class="p-4 hover:bg-gray-50 transition-colors">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-2">
+                <div class="flex items-center gap-3 mb-2">
                   <icon-lucide-file-code-2 :class="['w-4 h-4 flex-shrink-0', h.lastError ? 'text-red-500' : 'text-muted-foreground']" />
                   <h3 class="text-base font-medium truncate">{{ h.name }}</h3>
-                  <span :class="['px-2 py-0.5 rounded text-xs font-medium flex-shrink-0', h.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600']">
-                    {{ h.enabled ? '启用' : '禁用' }}
-                  </span>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <Switch :checked="h.enabled" @update:checked="(val) => toggleHookEnabled(h.name, val)" />
+                  </div>
                 </div>
                 <p v-if="h.desc" class="text-sm text-muted-foreground mb-2">{{ h.desc }}</p>
                 <div class="flex items-center gap-4 text-xs text-muted-foreground">
@@ -187,15 +188,6 @@ async function toggleHookEnabled(targetName: string | undefined, enabled: boolea
                 </div>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-8 w-8"
-                  :title="h.enabled ? '禁用' : '启用'"
-                  @click="() => toggleHookEnabled(h.name, !h.enabled)"
-                >
-                  <icon-lucide-power :class="['w-4 h-4', h.enabled ? 'text-green-500' : 'text-gray-400']" />
-                </Button>
                 <Button
                   size="sm"
                   variant="outline"
