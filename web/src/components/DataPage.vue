@@ -85,6 +85,101 @@ function toggleRowSelection(itemId: string, checked: boolean) {
   }
 }
 
+// notify 相关状态
+interface NotifyItem {
+  id: string
+  title: string
+  content?: string
+  workitemId?: string
+  createdAt?: string
+}
+
+const notifyItems = ref<NotifyItem[]>([])
+const notifyDialogOpen = ref(false)
+const notifyDialogWorkitemId = ref<string | null>(null)
+const notifyDialogSelectedIds = ref<Record<string, boolean>>({})
+
+const notifyCountMap = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {}
+  for (const it of notifyItems.value) {
+    if (it && it.workitemId) {
+      map[it.workitemId] = (map[it.workitemId] || 0) + 1
+    }
+  }
+  return map
+})
+
+const currentNotifyList = computed(() => {
+  if (!notifyDialogWorkitemId.value) return []
+  return notifyItems.value.filter((it) => it.workitemId === notifyDialogWorkitemId.value)
+})
+
+async function loadNotify() {
+  try {
+    const res = await fetch('/__data/notify', { cache: 'no-store' })
+    if (!res.ok) return
+    const data = await res.json()
+    notifyItems.value = Array.isArray(data) ? data : []
+  } catch {
+    // ignore
+    notifyItems.value = []
+  }
+}
+
+
+function openNotifyDialogForWorkitem(id: string) {
+  notifyDialogWorkitemId.value = id
+  notifyDialogSelectedIds.value = {}
+  notifyDialogOpen.value = true
+}
+
+const notifyDialogHasSelection = computed(() => {
+  return Object.values(notifyDialogSelectedIds.value).some(Boolean)
+})
+
+const notifyDialogIsSelectAll = computed(() => {
+  if (currentNotifyList.value.length === 0) return false
+  return currentNotifyList.value.every((it) => notifyDialogSelectedIds.value[it.id])
+})
+
+const notifyDialogIsSelectSome = computed(() => {
+  const count = Object.values(notifyDialogSelectedIds.value).filter(Boolean).length
+  return count > 0 && count < currentNotifyList.value.length
+})
+
+function toggleNotifyDialogSelectAll(checked: boolean) {
+  if (checked) {
+    const map: Record<string, boolean> = {}
+    currentNotifyList.value.forEach((it) => { map[it.id] = true })
+    notifyDialogSelectedIds.value = map
+  } else {
+    notifyDialogSelectedIds.value = {}
+  }
+}
+
+async function clearSelectedNotifies() {
+  const ids = Object.keys(notifyDialogSelectedIds.value).filter((id) => notifyDialogSelectedIds.value[id])
+  if (!ids.length) return
+  try {
+    for (const id of ids) {
+      await fetch('/__data/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'removeById', id }),
+      })
+    }
+    notifyItems.value = notifyItems.value.filter((it) => !notifyDialogSelectedIds.value[it.id])
+    notifyDialogSelectedIds.value = {}
+    // 如果所有提醒都被删除了，关闭对话框
+    if (currentNotifyList.value.length === 0) {
+      notifyDialogOpen.value = false
+      notifyDialogWorkitemId.value = null
+    }
+  } catch (e) {
+    alert('删除提醒失败：' + (e as Error).message)
+  }
+}
+
 // 排序后的列表（收藏始终排在前面）
 const items = computed(() => {
   let result = [...allItems.value]
@@ -457,6 +552,7 @@ function handleWorkitemsUpdated() {
 
 onMounted(() => {
   window.addEventListener('workitems-updated', handleWorkitemsUpdated)
+  loadNotify()
 })
 
 onUnmounted(() => {
@@ -474,12 +570,7 @@ onUnmounted(() => {
           <h1 class="text-2xl font-semibold">Data</h1>
           <p class="text-sm text-muted-foreground mt-1">Manage your work items</p>
         </div>
-        <Button @click="openFullEditor">
-          <icon-lucide-pencil class="w-4 h-4 mr-2" />
-          编辑数据
-        </Button>
       </div>
-
 
       <!-- 搜索和筛选控制 -->
       <div class="mb-4 flex items-center gap-2">
@@ -490,9 +581,13 @@ onUnmounted(() => {
           v-model="selectedKindFilters"
         />
         <div class="ml-auto flex items-center gap-2">
-        <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="reload">
-          <icon-lucide-refresh-ccw class="w-4 h-4" />
-        </Button>
+          <Button variant="outline" size="sm" @click="openFullEditor">
+            <icon-lucide-pencil class="w-4 h-4 mr-2" />
+            编辑数据
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="reload">
+            <icon-lucide-refresh-ccw class="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
@@ -502,7 +597,7 @@ onUnmounted(() => {
         <div v-if="items.length === 0" class="text-gray-500 text-center py-12">
           {{ selectedKindFilters.length > 0 ? '暂无匹配的资源' : '暂无资源，等待钩子更新' }}
         </div>
-        <div v-else class="rounded-md border">
+        <div v-else class="rounded-md border w-full">
           <Table>
             <TableHeader>
               <TableRow>
@@ -573,6 +668,7 @@ onUnmounted(() => {
                     />
                   </button>
                 </TableHead>
+                <TableHead class="w-[100px]">提醒</TableHead>
                 <TableHead class="w-[100px] text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -618,6 +714,17 @@ onUnmounted(() => {
                   <span v-if="it.kind" :class="['px-2 py-0.5 rounded text-xs font-medium', getKindColor(it.kind)]">
                     {{ it.kind }}
                   </span>
+                  <span v-else class="text-sm text-muted-foreground">-</span>
+                </TableCell>
+                <TableCell>
+                  <button
+                    v-if="notifyCountMap[it.id]"
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-full bg-red-100 text-red-700 text-[11px] px-2 py-0.5 leading-none"
+                    @click="openNotifyDialogForWorkitem(it.id)"
+                  >
+                    {{ notifyCountMap[it.id] }}
+                  </button>
                   <span v-else class="text-sm text-muted-foreground">-</span>
                 </TableCell>
                 <TableCell class="text-right">
@@ -666,7 +773,7 @@ onUnmounted(() => {
         <!-- 选择计数和批量操作 -->
         <div v-if="selectedCount > 0" class="flex items-center justify-between px-2 py-4 border-t">
           <div class="text-sm text-muted-foreground">
-            {{ selectedCount }} of {{ items.length }} row(s) selected.
+            {{ selectedCount }}/{{ items.length }} 个事项被选中.
           </div>
           <div class="flex items-center gap-2">
             <Button
@@ -680,7 +787,7 @@ onUnmounted(() => {
                 }
               }"
             >
-              <icon-lucide-trash-2 class="w-4 h-4 mr-2" />
+
               删除选中
             </Button>
             <Button variant="outline" size="sm" @click="rowSelection = {}">
@@ -754,6 +861,77 @@ onUnmounted(() => {
           <Button type="button" @click="saveRecord" :disabled="addingRecord">
             {{ addingRecord ? '保存中…' : '保存' }}
           </Button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 提醒列表对话框（自定义实现） -->
+    <div
+      v-if="notifyDialogOpen && notifyDialogWorkitemId"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      @click.self="() => { notifyDialogOpen = false; notifyDialogWorkitemId = null; notifyDialogSelectedIds = {} }"
+    >
+      <div class="bg-background rounded-lg border shadow-lg w-full max-w-2xl p-6">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">提醒列表</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              共 {{ currentNotifyList.length }} 条与该工作项相关的提醒。
+            </p>
+          </div>
+        </div>
+        <div class="space-y-3 max-h-80 overflow-auto">
+          <div
+            v-for="n in currentNotifyList"
+            :key="n.id"
+            class="border rounded-md px-3 py-2 bg-muted/40 flex items-start gap-3"
+          >
+            <Checkbox
+              :checked="notifyDialogSelectedIds[n.id] === true"
+              @update:checked="(val) => { notifyDialogSelectedIds[n.id] = !!val }"
+              class="mt-1"
+            />
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-1">
+                <div class="font-medium text-sm">
+                  {{ n.title || '提醒' }}
+                </div>
+                <div v-if="n.createdAt" class="text-xs text-muted-foreground">
+                  {{ new Date(n.createdAt).toLocaleString() }}
+                </div>
+              </div>
+              <div class="text-sm text-muted-foreground whitespace-pre-line">
+                {{ n.content || '-' }}
+              </div>
+            </div>
+          </div>
+          <div v-if="currentNotifyList.length === 0" class="text-sm text-muted-foreground">
+            当前工作项暂无提醒。
+          </div>
+        </div>
+        <div class="mt-4 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <Checkbox
+              :checked="notifyDialogIsSelectAll ? true : (notifyDialogIsSelectSome ? 'indeterminate' : false)"
+              @update:checked="toggleNotifyDialogSelectAll"
+            />
+            <span class="text-sm text-muted-foreground">
+              {{ notifyDialogHasSelection ? `已选择 ${Object.values(notifyDialogSelectedIds).filter(Boolean).length} 条` : '全选' }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="!notifyDialogHasSelection"
+              @click="clearSelectedNotifies"
+            >
+              标记所选为已完成
+            </Button>
+            <Button variant="outline" size="sm" @click="() => { notifyDialogOpen = false; notifyDialogWorkitemId = null; notifyDialogSelectedIds = {} }">
+              关闭
+            </Button>
+          </div>
         </div>
       </div>
     </div>

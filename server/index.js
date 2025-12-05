@@ -61,6 +61,7 @@ function ensureDataDir() {
     const workitemsFile = path.join(dataDir, 'workitems.json');
     const hooksFile = path.join(dataDir, 'hooks.json');
     const kindsFile = path.join(dataDir, 'kind.json');
+    const notifyFile = path.join(dataDir, 'notify.json');
     if (!fs.existsSync(workitemsFile)) {
       fs.writeFileSync(workitemsFile, '[]\n', 'utf-8');
     }
@@ -196,6 +197,9 @@ function ensureDataDir() {
         },
       ];
       fs.writeFileSync(kindsFile, JSON.stringify(defaultKinds, null, 2) + '\n', 'utf-8');
+    }
+    if (!fs.existsSync(notifyFile)) {
+      fs.writeFileSync(notifyFile, '[]\n', 'utf-8');
     }
   }
 }
@@ -468,6 +472,83 @@ app.get('/__data/kinds', (req, res) => {
     res.json(kinds);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// API: 获取 notify 列表（可选按 workitemId 过滤）
+app.get('/__data/notify', (req, res) => {
+  try {
+    const notifyFile = path.join(dataDir, 'notify.json');
+    if (!fs.existsSync(notifyFile)) {
+      res.json([]);
+      return;
+    }
+    const content = fs.readFileSync(notifyFile, 'utf-8');
+    const items = JSON.parse(content || '[]');
+    const workitemId = typeof req.query.workitemId === 'string' ? req.query.workitemId : '';
+    let result = Array.isArray(items) ? items : [];
+    if (workitemId) {
+      result = result.filter((it) => it && it.workitemId === workitemId);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// API: 更新 notify（支持新增和清理）
+// body: { action: 'add' | 'clearByWorkitem' | 'clearAll' | 'removeById', item?, workitemId?, id? }
+app.post('/__data/notify', (req, res) => {
+  try {
+    const body = req.body || {};
+    const action = body.action;
+    const notifyFile = path.join(dataDir, 'notify.json');
+    const exists = fs.existsSync(notifyFile) ? fs.readFileSync(notifyFile, 'utf-8') : '[]';
+    let items = JSON.parse(exists || '[]');
+    if (!Array.isArray(items)) items = [];
+
+    if (action === 'add') {
+      const item = body.item || {};
+      if (!item || typeof item !== 'object') {
+        throw new Error('item must be object');
+      }
+      const now = new Date().toISOString();
+      const id = typeof item.id === 'string' && item.id.trim()
+        ? item.id.trim()
+        : generateCommitLikeId();
+      const next = {
+        id,
+        title: typeof item.title === 'string' ? item.title : '提醒',
+        content: typeof item.content === 'string' ? item.content : '',
+        workitemId: typeof item.workitemId === 'string' ? item.workitemId : undefined,
+        createdAt: item.createdAt || now,
+      };
+      items.push(next);
+    } else if (action === 'clearByWorkitem') {
+      const workitemId = typeof body.workitemId === 'string' ? body.workitemId : '';
+      if (!workitemId) {
+        throw new Error('workitemId is required');
+      }
+      items = items.filter((it) => !it || it.workitemId !== workitemId);
+    } else if (action === 'clearAll') {
+      items = [];
+    } else if (action === 'removeById') {
+      const id = typeof body.id === 'string' ? body.id : '';
+      if (!id) {
+        throw new Error('id is required');
+      }
+      items = items.filter((it) => !it || it.id !== id);
+    } else {
+      throw new Error('invalid action');
+    }
+
+    const tmpFile = notifyFile + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(items, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmpFile, notifyFile);
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
   }
 });
 

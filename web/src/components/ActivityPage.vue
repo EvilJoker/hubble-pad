@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useWorkitems } from '@/composables/useWorkitems'
 import type { WorkItem } from '@/types/workitem'
 import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import DataFacetedFilter from '@/components/DataFacetedFilter.vue'
 
 const { allItems, loading, error, reload, keyword } = useWorkitems()
@@ -183,39 +184,43 @@ onUnmounted(() => {
       <div v-if="loading">加载中…</div>
       <div v-else-if="error" class="text-red-600">数据文件不可用：{{ error }}</div>
       <div v-else>
-        <div v-if="groupedRecords.length === 0" class="text-gray-500">暂无变更记录</div>
-        <div v-else class="space-y-6">
-          <!-- 按日期分组展示 -->
-          <div v-for="group in groupedRecords" :key="group.date" class="rounded border bg-white p-4">
-            <!-- 日期标题 -->
-            <div class="mb-4 pb-2 border-b">
-              <h2 class="text-lg font-medium">{{ group.dateFormatted }}</h2>
-            </div>
-
-            <!-- 该日期的所有记录 -->
-            <div class="space-y-3">
-              <div
-                v-for="(activity, idx) in group.records"
-                :key="`${activity.workItem.id}-${idx}`"
-                class="flex items-start gap-3 p-3 rounded-md hover:bg-muted/50 transition-colors"
-              >
-                <!-- 时间戳（如果有 createdAt） -->
-                <div v-if="activity.record.createdAt" class="text-xs text-muted-foreground flex-shrink-0 w-20">
-                  {{ new Date(activity.record.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}
-                </div>
-                <div v-else class="text-xs text-muted-foreground flex-shrink-0 w-20">--:--</div>
-
-                <!-- 工作项信息 -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-1">
+        <div v-if="groupedRecords.length === 0" class="text-gray-500 text-center py-12">暂无变更记录</div>
+        <div v-else class="rounded-md border w-full">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead class="w-[100px]">日期</TableHead>
+                <TableHead class="w-[80px]">时间</TableHead>
+                <TableHead class="w-[120px]">工作项ID</TableHead>
+                <TableHead>标题</TableHead>
+                <TableHead>内容</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <template v-for="group in groupedRecords" :key="group.date">
+                <TableRow v-for="(activity, idx) in group.records" :key="`${activity.workItem.id}-${idx}`">
+                  <TableCell class="font-medium">
+                    {{ idx === 0 ? group.dateFormatted : '' }}
+                  </TableCell>
+                  <TableCell class="text-sm text-muted-foreground">
+                    <span v-if="activity.record.createdAt">
+                      {{ new Date(activity.record.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}
+                    </span>
+                    <span v-else>--:--</span>
+                  </TableCell>
+                  <TableCell>
                     <span class="text-sm font-medium text-blue-600">{{ activity.workItem.id }}</span>
-                    <span class="text-sm text-muted-foreground truncate">{{ activity.workItem.title }}</span>
-                  </div>
-                  <div class="text-sm text-foreground">{{ activity.record.content }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+                  </TableCell>
+                  <TableCell>
+                    <span class="text-sm text-muted-foreground">{{ activity.workItem.title }}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span class="text-sm text-foreground">{{ activity.record.content }}</span>
+                  </TableCell>
+                </TableRow>
+              </template>
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>

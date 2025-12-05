@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import Checkbox from '@/components/ui/checkbox/Checkbox.vue'
 import { useHooks, type HookItem } from '@/composables/useHooks'
 
 const { hooks: hooksData, load: loadHooks } = useHooks()
@@ -33,9 +34,22 @@ function getTaskStatus(hook: HookItem): { label: string; color: string; icon: st
   return { label: '待执行', color: 'bg-gray-100 text-gray-700', icon: 'circle' }
 }
 
+const keyword = ref('')
+
+// 行选择
+const rowSelection = ref<Record<string, boolean>>({})
+
 // 排序后的任务列表
 const hooks = computed(() => {
   let result = [...hooksData.value]
+
+  // 应用关键词搜索
+  const k = keyword.value.trim().toLowerCase()
+  if (k) {
+    result = result.filter((it) =>
+      [it.name, it.desc].some((f) => (f || '').toLowerCase().includes(k)),
+    )
+  }
 
   if (!sortKey.value || !sortOrder.value) {
     return result
@@ -77,6 +91,42 @@ const hooks = computed(() => {
 
   return result
 })
+
+const isSelectAll = computed(() => {
+  if (hooks.value.length === 0) return false
+  return hooks.value.every((item) => item.name && rowSelection.value[item.name])
+})
+const isSelectSome = computed(() => {
+  const count = Object.values(rowSelection.value).filter(Boolean).length
+  return count > 0 && count < hooks.value.length
+})
+const selectedCount = computed(() => {
+  return Object.values(rowSelection.value).filter(Boolean).length
+})
+
+function toggleSelectAll(checked: boolean) {
+  if (checked) {
+    hooks.value.forEach((item) => {
+      if (item.name) {
+        rowSelection.value[item.name] = true
+      }
+    })
+  } else {
+    hooks.value.forEach((item) => {
+      if (item.name) {
+        delete rowSelection.value[item.name]
+      }
+    })
+  }
+}
+
+function toggleRowSelection(itemName: string, checked: boolean) {
+  if (checked) {
+    rowSelection.value[itemName] = true
+  } else {
+    delete rowSelection.value[itemName]
+  }
+}
 
 function handleSort(key: SortKey) {
   if (sortKey.value === key) {
@@ -254,6 +304,25 @@ async function handleDeleteTask(name: string | undefined) {
     const updated = current.filter((h) => h && h.name !== name)
     await fetch('/__hooks/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
     await loadHooks()
+    delete rowSelection.value[name]
+  } catch (e) {
+    alert('删除任务失败: ' + (e as Error).message)
+  }
+}
+
+async function deleteSelectedTasks() {
+  const selectedNames = Object.keys(rowSelection.value).filter((n) => rowSelection.value[n])
+  if (!selectedNames.length) return
+  const ok = window.confirm(`确定要删除选中的 ${selectedNames.length} 个任务吗？`)
+  if (!ok) return
+
+  try {
+    const current = Array.isArray(hooks.value) ? hooks.value : []
+    const namesToDelete = new Set(selectedNames)
+    const updated = current.filter((h) => !h || !h.name || !namesToDelete.has(h.name))
+    await fetch('/__hooks/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+    rowSelection.value = {}
+    await loadHooks()
   } catch (e) {
     alert('删除任务失败: ' + (e as Error).message)
   }
@@ -330,26 +399,40 @@ function getTypeColor(type?: string): string {
           <h1 class="text-2xl font-semibold">Task</h1>
           <p class="text-sm text-muted-foreground mt-1">Manage your task hooks</p>
         </div>
-        <div class="flex gap-2">
-          <Button variant="outline" @click="openAddTaskDialog">
+      </div>
+
+      <!-- 搜索控制 -->
+      <div class="mb-4 flex items-center gap-2">
+        <Input v-model="keyword" placeholder="Filter tasks..." class="max-w-sm" />
+        <div class="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" @click="openAddTaskDialog">
             <icon-lucide-plus class="w-4 h-4 mr-2" />
             新增任务
           </Button>
-          <Button variant="outline" @click="openHooksEditor">
+          <Button variant="outline" size="sm" @click="openHooksEditor">
             <icon-lucide-pencil class="w-4 h-4 mr-2" />
             编辑
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="loadHooks">
+            <icon-lucide-refresh-ccw class="w-4 h-4" />
           </Button>
         </div>
       </div>
 
       <!-- 任务列表 - 使用表格布局 -->
       <div v-if="hooks.length === 0" class="text-gray-500 text-center py-12">
-        暂无任务，点击"新增任务"添加任务
+        {{ keyword.trim() ? '暂无匹配的任务' : '暂无任务，点击"新增任务"添加任务' }}
       </div>
-      <div v-else class="rounded-md border">
+      <div v-else class="rounded-md border w-full">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead class="w-12">
+                <Checkbox
+                  :checked="isSelectAll ? true : (isSelectSome ? 'indeterminate' : false)"
+                  @update:checked="toggleSelectAll"
+                />
+              </TableHead>
               <TableHead class="w-[100px]">
                 <button
                   class="flex items-center gap-2 hover:text-foreground transition-colors cursor-pointer"
@@ -438,6 +521,12 @@ function getTypeColor(type?: string): string {
           </TableHeader>
           <TableBody>
             <TableRow v-for="h in hooks" :key="h.name">
+              <TableCell>
+                <Checkbox
+                  :checked="h.name ? rowSelection[h.name] === true : false"
+                  @update:checked="(val) => h.name && toggleRowSelection(h.name, !!val)"
+                />
+              </TableCell>
               <TableCell class="font-medium">{{ h.name }}</TableCell>
               <TableCell>
                 <div class="max-w-[500px]">
@@ -513,6 +602,21 @@ function getTypeColor(type?: string): string {
             </TableRow>
           </TableBody>
         </Table>
+      </div>
+
+      <!-- 选中项操作栏 -->
+      <div v-if="selectedCount > 0" class="flex items-center justify-between px-2 py-4 border-t">
+        <div class="text-sm text-muted-foreground">
+          {{ selectedCount }}/{{ hooks.length }} 个事项被选中.
+        </div>
+        <div class="flex items-center gap-2">
+          <Button variant="outline" size="sm" @click="deleteSelectedTasks">
+            删除选中
+          </Button>
+          <Button variant="outline" size="sm" @click="rowSelection = {}">
+            取消选择
+          </Button>
+        </div>
       </div>
     </div>
 

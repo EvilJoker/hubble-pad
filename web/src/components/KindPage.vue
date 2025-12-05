@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
+import Checkbox from '@/components/ui/checkbox/Checkbox.vue'
 
 // 类型定义
 interface KindItem {
@@ -34,6 +35,65 @@ const popularColors = [
 
 const kinds = ref<KindItem[]>([])
 const loading = ref(false)
+const keyword = ref('')
+
+const filteredKinds = computed(() => {
+  let result = [...kinds.value]
+  // 应用关键词搜索
+  const k = keyword.value.trim().toLowerCase()
+  if (k) {
+    result = result.filter((it) =>
+      [it.value, it.label, it.description].some((f) => (f || '').toLowerCase().includes(k)),
+    )
+  }
+  return result
+})
+
+// 行选择
+const rowSelection = ref<Record<string, boolean>>({})
+const isSelectAll = computed(() => {
+  if (filteredKinds.value.length === 0) return false
+  return filteredKinds.value.every((item) => rowSelection.value[item.value])
+})
+const isSelectSome = computed(() => {
+  const count = Object.values(rowSelection.value).filter(Boolean).length
+  return count > 0 && count < filteredKinds.value.length
+})
+const selectedCount = computed(() => {
+  return Object.values(rowSelection.value).filter(Boolean).length
+})
+
+function toggleSelectAll(checked: boolean) {
+  if (checked) {
+    filteredKinds.value.forEach((item) => {
+      rowSelection.value[item.value] = true
+    })
+  } else {
+    filteredKinds.value.forEach((item) => {
+      delete rowSelection.value[item.value]
+    })
+  }
+}
+
+function toggleRowSelection(itemValue: string, checked: boolean) {
+  if (checked) {
+    rowSelection.value[itemValue] = true
+  } else {
+    delete rowSelection.value[itemValue]
+  }
+}
+
+async function deleteSelectedKinds() {
+  const selectedValues = Object.keys(rowSelection.value).filter((v) => rowSelection.value[v])
+  if (!selectedValues.length) return
+  const ok = window.confirm(`确定要删除选中的 ${selectedValues.length} 个类型吗？`)
+  if (!ok) return
+
+  const valuesToDelete = new Set(selectedValues)
+  kinds.value = kinds.value.filter((k) => !valuesToDelete.has(k.value))
+  rowSelection.value = {}
+  await saveKinds()
+}
 
 // 新增类型对话框
 const addKindDialogOpen = ref(false)
@@ -264,21 +324,37 @@ onMounted(() => {
           <h1 class="text-2xl font-semibold">Kind</h1>
           <p class="text-sm text-muted-foreground mt-1">Manage work item types</p>
         </div>
-        <Button variant="outline" @click="openAddKindDialog">
-          <icon-lucide-plus class="w-4 h-4 mr-2" />
-          新增类型
-        </Button>
+      </div>
+
+      <!-- 搜索控制 -->
+      <div class="mb-4 flex items-center gap-2">
+        <Input v-model="keyword" placeholder="Filter tasks..." class="max-w-sm" />
+        <div class="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" @click="openAddKindDialog">
+            <icon-lucide-plus class="w-4 h-4 mr-2" />
+            新增类型
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="loadKinds">
+            <icon-lucide-refresh-ccw class="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <!-- 类型列表 -->
       <div v-if="loading" class="text-gray-500 text-center py-12">加载中…</div>
-      <div v-else-if="kinds.length === 0" class="text-gray-500 text-center py-12">
-        暂无类型，点击"新增类型"添加类型
+      <div v-else-if="filteredKinds.length === 0" class="text-gray-500 text-center py-12">
+        {{ keyword.trim() ? '暂无匹配的类型' : '暂无类型，点击"新增类型"添加类型' }}
       </div>
-      <div v-else class="rounded-md border">
+      <div v-else class="rounded-md border w-full">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead class="w-12">
+                <Checkbox
+                  :checked="isSelectAll ? true : (isSelectSome ? 'indeterminate' : false)"
+                  @update:checked="toggleSelectAll"
+                />
+              </TableHead>
               <TableHead class="w-[100px]">值</TableHead>
               <TableHead>标签</TableHead>
               <TableHead class="w-[200px]">描述</TableHead>
@@ -287,7 +363,13 @@ onMounted(() => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="k in kinds" :key="k.value">
+            <TableRow v-for="k in filteredKinds" :key="k.value">
+              <TableCell>
+                <Checkbox
+                  :checked="rowSelection[k.value] === true"
+                  @update:checked="(val) => toggleRowSelection(k.value, !!val)"
+                />
+              </TableCell>
               <TableCell class="font-medium">{{ k.value }}</TableCell>
               <TableCell>
                 <span :class="['px-2 py-0.5 rounded text-xs font-medium', k.color]">
@@ -331,6 +413,21 @@ onMounted(() => {
             </TableRow>
           </TableBody>
         </Table>
+      </div>
+
+      <!-- 选中项操作栏 -->
+      <div v-if="selectedCount > 0" class="flex items-center justify-between px-2 py-4 border-t">
+        <div class="text-sm text-muted-foreground">
+          {{ selectedCount }}/{{ filteredKinds.length }} 个事项被选中.
+        </div>
+        <div class="flex items-center gap-2">
+          <Button variant="outline" size="sm" @click="deleteSelectedKinds">
+            删除选中
+          </Button>
+          <Button variant="outline" size="sm" @click="rowSelection = {}">
+            取消选择
+          </Button>
+        </div>
       </div>
     </div>
 

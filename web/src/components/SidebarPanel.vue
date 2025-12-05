@@ -163,6 +163,23 @@ onMounted(() => {
                   </Tooltip>
                 </TooltipProvider>
               </SidebarMenuItem>
+
+              <!-- Notify item -->
+              <SidebarMenuItem>
+                <TooltipProvider>
+                  <Tooltip :delayDuration="100">
+                    <TooltipTrigger as-child>
+                      <SidebarMenuButton as-child>
+                        <a href="#/notify" @click.prevent="emits('navigate', '/notify')" class="flex items-center gap-2 pl-3">
+                          <icon-lucide-bell class="w-4 h-4" />
+                          <span>Notify</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent class="z-50">查看待办提醒</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

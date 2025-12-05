@@ -372,6 +372,7 @@ export default defineConfig({
 
         // --- kinds endpoints ---
         const kindsFile = path.join(dataDir, 'kind.json')
+        const notifyFile = path.join(dataDir, 'notify.json')
 
         server.middlewares.use('/__data/kinds', async (req, res, next) => {
           if (req.method === 'GET') {
@@ -428,6 +429,104 @@ export default defineConfig({
               res.statusCode = 400
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+            }
+            return
+          }
+          next()
+        })
+
+        // --- notify endpoints ---
+        server.middlewares.use('/__data/notify', async (req, res, next) => {
+          if (req.method === 'GET') {
+            try {
+              const url = new URL(req.originalUrl || req.url || '', 'http://localhost')
+              const workitemId = url.searchParams.get('workitemId') || ''
+              if (!fs.existsSync(notifyFile)) {
+                res.setHeader('Content-Type', 'application/json')
+                res.end('[]')
+                return
+              }
+              const txt = fs.readFileSync(notifyFile, 'utf-8')
+              let items: any[] = []
+              try {
+                const parsed = JSON.parse(txt || '[]')
+                items = Array.isArray(parsed) ? parsed : []
+              } catch {
+                items = []
+              }
+              if (workitemId) {
+                items = items.filter((it: any) => it && it.workitemId === workitemId)
+              }
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify(items))
+            } catch (e) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+            }
+            return
+          }
+          if (req.method === 'POST') {
+            try {
+              const chunks: Buffer[] = []
+              await new Promise<void>((resolve, reject) => {
+                req.on('data', (c) => chunks.push(Buffer.from(c)))
+                req.on('end', () => resolve())
+                req.on('error', (e) => reject(e))
+              })
+              const raw = Buffer.concat(chunks).toString('utf-8')
+              const body = JSON.parse(raw || '{}')
+              const action = body.action
+              const exists = fs.existsSync(notifyFile) ? fs.readFileSync(notifyFile, 'utf-8') : '[]'
+              let items: any[] = []
+              try {
+                const parsed = JSON.parse(exists || '[]')
+                items = Array.isArray(parsed) ? parsed : []
+              } catch {
+                items = []
+              }
+
+              if (action === 'add') {
+                const item = body.item || {}
+                if (!item || typeof item !== 'object') {
+                  throw new Error('item must be object')
+                }
+                const now = new Date().toISOString()
+                const id = typeof item.id === 'string' && item.id.trim()
+                  ? item.id.trim()
+                  : Math.random().toString(36).slice(2)
+                const next = {
+                  id,
+                  title: typeof item.title === 'string' ? item.title : '提醒',
+                  content: typeof item.content === 'string' ? item.content : '',
+                  workitemId: typeof item.workitemId === 'string' ? item.workitemId : undefined,
+                  createdAt: item.createdAt || now,
+                }
+                items.push(next)
+              } else if (action === 'clearByWorkitem') {
+                const workitemId = typeof body.workitemId === 'string' ? body.workitemId : ''
+                if (!workitemId) throw new Error('workitemId is required')
+                items = items.filter((it: any) => !it || it.workitemId !== workitemId)
+              } else if (action === 'clearAll') {
+                items = []
+              } else if (action === 'removeById') {
+                const id = typeof body.id === 'string' ? body.id : ''
+                if (!id) throw new Error('id is required')
+                items = items.filter((it: any) => !it || it.id !== id)
+              } else {
+                throw new Error('invalid action')
+              }
+
+              const tmpFile = notifyFile + '.tmp'
+              fs.writeFileSync(tmpFile, JSON.stringify(items, null, 2) + '\n', 'utf-8')
+              fs.renameSync(tmpFile, notifyFile)
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: true }))
+            } catch (e) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
             }
             return
           }

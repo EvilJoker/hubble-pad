@@ -1,11 +1,11 @@
 [
   {
-    "name": "fetch-rdc",
-    "desc": "拉取 RDC 工作项",
-    "cmd": "python data/hook/rdc_export/get_rdc_workitems.py",
+    "name": "github-repos1",
+    "desc": "拉取 GitHub 组织仓库并输出 WorkItem[]",
+    "cmd": "bash data/hook/github_repo1.sh",
     "cwd": "./",
     "enabled": true,
-    "lastRunAt": "2025-12-04T04:03:34.602Z",
+    "lastRunAt": "2025-12-04T09:40:57.898Z",
     "lastError": null,
     "type": "update",
     "schedule": null
@@ -17,6 +17,19 @@
     "cwd": "./",
     "enabled": true,
     "lastRunAt": "2025-11-03T07:12:14.120Z",
-    "lastError": "模拟失败: 拉取仓库出错"
+    "lastError": "模拟失败: 拉取仓库出错",
+    "type": "update",
+    "schedule": null
+  },
+  {
+    "name": "task-notify-demo",
+    "desc": "示例：为所有 task 类型工作项新增提醒（写入 notify.json）",
+    "cmd": "bash data/hook/add_task_notify.sh",
+    "cwd": "./",
+    "enabled": true,
+    "type": "update",
+    "schedule": null,
+    "lastRunAt": "2025-12-05T02:06:38.172Z",
+    "lastError": null
   }
 ]

@@ -97,5 +97,23 @@
       "repository": "github.com/example/repo",
       "branch": "main"
     }
+  },
+  {
+    "id": "repo1",
+    "title": "repo1",
+    "description": "核心服务",
+    "url": "https://example.com/repo1",
+    "kind": "code",
+    "source": "hook:github-repos1",
+    "updatedAt": "2025-12-04T09:40:57.898Z"
+  },
+  {
+    "id": "repo2",
+    "title": "repo2",
+    "description": "组件库",
+    "url": "https://example.com/repo2",
+    "kind": "code",
+    "source": "hook:github-repos1",
+    "updatedAt": "2025-12-04T09:40:57.898Z"
   }
 ]

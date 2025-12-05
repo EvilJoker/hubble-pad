@@ -5,6 +5,7 @@ import KindPage from '@/components/KindPage.vue'
 import DataPage from '@/components/DataPage.vue'
 import TaskPage from '@/components/TaskPage.vue'
 import ActivityPage from '@/components/ActivityPage.vue'
+import NotifyPage from '@/components/NotifyPage.vue'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -17,7 +18,7 @@ function handleNavigate(path: string) {
 
 function syncPathFromHash() {
   const hash = window.location.hash.slice(1) || '/kind'
-  if (hash === '/kind' || hash === '/data' || hash === '/task' || hash === '/activity') {
+  if (hash === '/kind' || hash === '/data' || hash === '/task' || hash === '/activity' || hash === '/notify') {
     currentPath.value = hash
   } else {
     currentPath.value = '/kind'
@@ -44,6 +45,8 @@ const currentComponent = computed(() => {
       return TaskPage
     case '/activity':
       return ActivityPage
+    case '/notify':
+      return NotifyPage
     default:
       return KindPage
   }
