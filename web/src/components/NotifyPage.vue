@@ -79,13 +79,11 @@ async function clearSelected() {
   if (!ids.length) return
   if (!confirm(`确定要删除选中的 ${ids.length} 条提醒吗？`)) return
   try {
-    for (const id of ids) {
-      // 逐条删除，简化实现
-      // eslint-disable-next-line no-await-in-loop
-      await postNotify({ action: 'removeById', id })
-    }
-    allItems.value = allItems.value.filter((it) => !selectedIds.value[it.id])
+    // 使用批量删除 API
+    await postNotify({ action: 'removeByIds', ids })
     selectedIds.value = {}
+    // 重新加载数据以确保同步
+    await loadNotify()
   } catch (e) {
     alert('删除失败：' + (e as Error).message)
   }

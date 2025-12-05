@@ -56,7 +56,7 @@ interface ActivityRecord {
 // 从 content 中提取日期（YYYYMMDD 格式）
 function extractDate(content: string): string | null {
   const match = content.match(/^(\d{8})/)
-  if (!match) return null
+  if (!match || !match[1]) return null
   const dateStr = match[1]
   // 验证日期有效性
   const y = parseInt(dateStr.slice(0, 4), 10)
@@ -128,10 +128,12 @@ const groupedRecords = computed(() => {
   // 按日期分组
   const grouped: Record<string, ActivityRecord[]> = {}
   for (const record of records) {
-    if (!grouped[record.date]) {
-      grouped[record.date] = []
+    const date = record.date
+    if (!date) continue
+    if (!grouped[date]) {
+      grouped[date] = []
     }
-    grouped[record.date].push(record)
+    grouped[date].push(record)
   }
 
   // 转换为数组，按日期倒序排列（最新的在前）

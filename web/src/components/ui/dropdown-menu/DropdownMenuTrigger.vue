@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { DropdownMenuTrigger as DropdownMenuTriggerPrimitive } from 'radix-vue'
 import type { HTMLAttributes } from 'vue'
-import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   class?: HTMLAttributes['class']

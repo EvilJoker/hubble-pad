@@ -15,7 +15,7 @@ npm install -g hubble-pad@beta
 ## Usage
 
 ```bash
-# Start the server (default port: 8000)
+# Start the server (default port: 10002)
 hubble-pad start
 
 # Check version
@@ -24,7 +24,7 @@ hubble-pad --version
 
 ## Configuration
 
-The server runs on port 8000 by default. You can change it by setting the `PORT` environment variable:
+The server runs on port 10002 by default. You can change it by setting the `PORT` environment variable:
 
 ```bash
 PORT=8080 hubble-pad start

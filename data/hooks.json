@@ -27,9 +27,9 @@
     "cmd": "bash data/hook/add_task_notify.sh",
     "cwd": "./",
     "enabled": true,
-    "type": "update",
+    "type": "auto",
     "schedule": null,
-    "lastRunAt": "2025-12-05T02:06:38.172Z",
-    "lastError": null
+    "lastRunAt": "2025-12-05T03:57:28.176Z",
+    "lastError": "无法连接到 API 服务器，请确保开发服务器正在运行（尝试了 http://127.0.0.1:10002）"
   }
 ]

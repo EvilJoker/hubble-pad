@@ -100,7 +100,7 @@ const addKindDialogOpen = ref(false)
 const newKind = ref<Partial<KindItem>>({
   value: '',
   label: '',
-  color: popularColors[0].value,
+  color: popularColors[0]?.value || '',
   description: '',
   example: '',
 })
@@ -111,7 +111,7 @@ const editingKindValue = ref<string | null>(null)
 const editKind = ref<Partial<KindItem>>({
   value: '',
   label: '',
-  color: popularColors[0].value,
+  color: popularColors[0]?.value || '',
   description: '',
   example: '',
 })
@@ -165,7 +165,7 @@ function openAddKindDialog() {
   newKind.value = {
     value: '',
     label: '',
-    color: popularColors[0].value,
+    color: popularColors[0]?.value || '',
     description: '',
     example: '',
   }
@@ -187,7 +187,7 @@ async function saveNewKind() {
   kinds.value.push({
     value: newKind.value.value!,
     label: newKind.value.label!,
-    color: newKind.value.color || popularColors[0].value,
+    color: newKind.value.color || popularColors[0]?.value || '',
     description: newKind.value.description || '',
     example: newKind.value.example || '',
   })
@@ -221,7 +221,7 @@ async function saveEditKind() {
     kinds.value[index] = {
       value: editKind.value.value,
       label: editKind.value.label,
-      color: editKind.value.color || popularColors[0].value,
+      color: editKind.value.color || popularColors[0]?.value || '',
       description: editKind.value.description || '',
       example: editKind.value.example || '',
     }

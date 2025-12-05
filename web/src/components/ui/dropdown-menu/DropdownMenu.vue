@@ -2,7 +2,7 @@
 import { DropdownMenuRoot } from 'radix-vue'
 import type { HTMLAttributes } from 'vue'
 
-const props = defineProps<{
+defineProps<{
   class?: HTMLAttributes['class']
 }>()
 </script>

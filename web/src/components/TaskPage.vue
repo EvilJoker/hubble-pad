@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+// 移除 Dialog 组件，使用自定义模态框避免遮蔽问题
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
@@ -157,7 +157,7 @@ const newTask = ref<Partial<HookItem>>({
   cwd: './',
   enabled: true,
   type: 'update',
-  schedule: null,
+  schedule: undefined,
 })
 
 // 编辑任务对话框
@@ -170,7 +170,7 @@ const editTask = ref<Partial<HookItem>>({
   cwd: './',
   enabled: true,
   type: 'update',
-  schedule: null,
+  schedule: undefined,
 })
 
 // 运行中状态
@@ -213,7 +213,7 @@ function openAddTaskDialog() {
     cwd: './',
     enabled: true,
     type: 'update',
-    schedule: null,
+    schedule: undefined,
   }
   addTaskDialogOpen.value = true
 }
@@ -235,7 +235,7 @@ async function saveNewTask() {
         cwd: newTask.value.cwd || './',
         enabled: newTask.value.enabled ?? true,
         type: newTask.value.type || 'update',
-        schedule: newTask.value.schedule || null,
+        schedule: newTask.value.schedule || undefined,
         lastRunAt: null,
         lastError: null,
       },
@@ -257,7 +257,7 @@ function openEditTaskDialog(hook: HookItem) {
     cwd: hook.cwd || './',
     enabled: hook.enabled ?? true,
     type: hook.type || 'update',
-    schedule: hook.schedule || null,
+    schedule: hook.schedule || undefined,
   }
   editTaskDialogOpen.value = true
 }
@@ -280,7 +280,7 @@ async function saveEditTask() {
           cwd: editTask.value.cwd || './',
           enabled: editTask.value.enabled ?? true,
           type: editTask.value.type || 'update',
-          schedule: editTask.value.schedule || null,
+          schedule: editTask.value.schedule || undefined,
         }
       }
       return h
@@ -339,8 +339,24 @@ async function handleRunHookByName(name: string | undefined) {
   runningNames.value.add(name)
   try {
     const res = await fetch(`/__hooks/run/${idx}`, { method: 'POST', signal: controller.signal })
-    const j = await res.json().catch(() => ({ ok: false }))
+    const j = await res.json().catch(() => ({ ok: false, message: '无法解析服务器响应' }))
     console.log('[hooks][client] run-one result:', j)
+
+    if (!res.ok || !j.ok) {
+      // 构建详细的错误信息
+      let errorMsg = j.message || j.error || '运行失败'
+      if (j.stderr) {
+        errorMsg += `\n\n详细错误信息：\n${j.stderr}`
+      }
+      alert(`任务 "${name}" 执行失败：\n${errorMsg}`)
+    } else {
+      // 成功时显示简要信息（可选）
+      const count = j.count || j.items?.length || 0
+      if (count > 0) {
+        console.log(`任务 "${name}" 执行成功，处理了 ${count} 项`)
+      }
+    }
+
     await loadHooks()
     window.dispatchEvent(new CustomEvent('workitems-updated'))
   } catch (e) {
@@ -615,32 +631,41 @@ function getTypeColor(type?: string): string {
           </Button>
           <Button variant="outline" size="sm" @click="rowSelection = {}">
             取消选择
-          </Button>
+                </Button>
+              </div>
+      </div>
+    </div>
+
+    <!-- 编辑对话框（自定义实现，避免第三方 Dialog 遮罩层干扰） -->
+    <div
+      v-if="hooksEditorOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      @click.self="hooksEditorOpen = false"
+    >
+      <div class="bg-background rounded-lg border shadow-lg w-full max-w-3xl p-6">
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">编辑 data/hooks.json</h2>
+        </div>
+        <div>
+          <Textarea v-model="hooksEditorText" class="h-80 font-mono text-sm" />
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <Button variant="outline" type="button" @click="hooksEditorOpen = false">取消</Button>
+          <Button type="button" @click="saveHooks" :disabled="savingHooks">{{ savingHooks ? '保存中…' : '保存' }}</Button>
         </div>
       </div>
     </div>
 
-    <!-- 编辑对话框 -->
-    <Dialog v-model:open="hooksEditorOpen">
-      <DialogContent class="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>编辑 data/hooks.json</DialogTitle>
-        </DialogHeader>
-        <div>
-          <Textarea v-model="hooksEditorText" class="h-80 font-mono text-sm" />
+    <!-- 新增任务对话框（自定义实现，避免第三方 Dialog 遮罩层干扰） -->
+    <div
+      v-if="addTaskDialogOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      @click.self="addTaskDialogOpen = false"
+    >
+      <div class="bg-background rounded-lg border shadow-lg w-full max-w-2xl p-6">
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">新增任务</h2>
         </div>
-        <DialogFooter>
-          <Button type="button" @click="saveHooks" :disabled="savingHooks">{{ savingHooks ? '保存中…' : '保存' }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- 新增任务对话框 -->
-    <Dialog v-model:open="addTaskDialogOpen">
-      <DialogContent class="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>新增任务</DialogTitle>
-        </DialogHeader>
         <div class="space-y-4">
           <div>
             <label class="text-sm font-medium mb-1 block">任务名称 *</label>
@@ -672,7 +697,7 @@ function getTypeColor(type?: string): string {
           </div>
           <div>
             <label class="text-sm font-medium mb-1 block">定时设置（可选）</label>
-            <Input v-model="newTask.schedule" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
+            <Input :model-value="newTask.schedule || ''" @update:model-value="(val) => { const str = typeof val === 'string' ? val : (val != null ? String(val) : ''); newTask.schedule = str || null; }" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
             <p class="text-xs text-muted-foreground mt-1">
               支持 cron 表达式（如 "*/5 * * * *" 表示每 5 分钟）或毫秒间隔（如 "300000" 表示 5 分钟）
             </p>
@@ -682,19 +707,23 @@ function getTypeColor(type?: string): string {
             <label class="text-sm">启用任务</label>
           </div>
         </div>
-        <DialogFooter>
+        <div class="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" @click="addTaskDialogOpen = false">取消</Button>
           <Button type="button" @click="saveNewTask">保存</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
 
-    <!-- 编辑任务对话框 -->
-    <Dialog v-model:open="editTaskDialogOpen">
-      <DialogContent class="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>编辑任务</DialogTitle>
-        </DialogHeader>
+    <!-- 编辑任务对话框（自定义实现，避免第三方 Dialog 遮罩层干扰） -->
+    <div
+      v-if="editTaskDialogOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      @click.self="editTaskDialogOpen = false"
+    >
+      <div class="bg-background rounded-lg border shadow-lg w-full max-w-2xl p-6">
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">编辑任务</h2>
+        </div>
         <div class="space-y-4">
           <div>
             <label class="text-sm font-medium mb-1 block">任务名称 *</label>
@@ -726,7 +755,7 @@ function getTypeColor(type?: string): string {
           </div>
           <div>
             <label class="text-sm font-medium mb-1 block">定时设置（可选）</label>
-            <Input v-model="editTask.schedule" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
+            <Input :model-value="editTask.schedule || ''" @update:model-value="(val) => { const str = typeof val === 'string' ? val : (val != null ? String(val) : ''); editTask.schedule = str || null; }" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
             <p class="text-xs text-muted-foreground mt-1">
               支持 cron 表达式（如 "*/5 * * * *" 表示每 5 分钟）或毫秒间隔（如 "300000" 表示 5 分钟）
             </p>
@@ -736,11 +765,11 @@ function getTypeColor(type?: string): string {
             <label class="text-sm">启用任务</label>
           </div>
         </div>
-        <DialogFooter>
+        <div class="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" @click="editTaskDialogOpen = false">取消</Button>
           <Button type="button" @click="saveEditTask">保存</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

@@ -2,7 +2,7 @@
 import { useWorkitems } from '@/composables/useWorkitems'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+// Select 组件未使用，已移除
 import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
@@ -75,6 +75,10 @@ function toggleSelectAll(checked: boolean) {
       delete rowSelection.value[item.id]
     })
   }
+}
+
+function isRowSelected(itemId: string): boolean {
+  return !!(rowSelection.value[itemId])
 }
 
 function toggleRowSelection(itemId: string, checked: boolean) {
@@ -161,15 +165,19 @@ async function clearSelectedNotifies() {
   const ids = Object.keys(notifyDialogSelectedIds.value).filter((id) => notifyDialogSelectedIds.value[id])
   if (!ids.length) return
   try {
-    for (const id of ids) {
-      await fetch('/__data/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'removeById', id }),
-      })
+    // 使用批量删除 API
+    const res = await fetch('/__data/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'removeByIds', ids }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error((data as any).message || `HTTP ${res.status}`)
     }
-    notifyItems.value = notifyItems.value.filter((it) => !notifyDialogSelectedIds.value[it.id])
     notifyDialogSelectedIds.value = {}
+    // 重新加载数据以确保同步
+    await loadNotify()
     // 如果所有提醒都被删除了，关闭对话框
     if (currentNotifyList.value.length === 0) {
       notifyDialogOpen.value = false
@@ -261,20 +269,7 @@ function handleDataSort(key: DataSortKey) {
   }
 }
 
-function getKindLabel(kind?: string): string {
-  switch (kind) {
-    case 'code':
-      return 'Code'
-    case 'task':
-      return 'Task'
-    case 'environment':
-      return 'Environment'
-    case 'knowledge':
-      return 'Knowledge'
-    default:
-      return '-'
-  }
-}
+// 未使用的函数，已移除
 
 function getKindColor(kind?: string): string {
   switch (kind) {
@@ -396,6 +391,19 @@ async function saveEditor() {
   }
 }
 
+function clearSelection() {
+  rowSelection.value = {}
+}
+
+function handleDeleteSelected() {
+  const selectedIds = Object.keys(rowSelection.value).filter(id => rowSelection.value[id])
+  if (selectedIds.length === 0) return
+  if (window.confirm(`确定要删除选中的 ${selectedIds.length} 个条目吗？`)) {
+    selectedIds.forEach(id => handleDelete({ id }))
+    clearSelection()
+  }
+}
+
 async function handleDelete(item: { id: string; title?: string }) {
   const name = item.title || item.id
   const ok = window.confirm(`确定要删除该条目吗？\n\n${name}`)
@@ -459,7 +467,6 @@ function isValidDatePrefix(str: string): boolean {
 
 function getRecordPlaceholder(): string {
   const datePrefix = getCurrentDatePrefix()
-  const defaultLabel = recordItemTitle.value || ''
   return `${datePrefix} <内容>（必须以 YYYYMMDD 开头，且不少于 20 个字）`
 }
 
@@ -676,7 +683,7 @@ onUnmounted(() => {
               <TableRow v-for="(it, idx) in items" :key="it.id">
                 <TableCell>
                   <Checkbox
-                    :checked="!!rowSelection[it.id]"
+                    :checked="isRowSelected(it.id)"
                     @update:checked="(checked) => toggleRowSelection(it.id, checked)"
                   />
                 </TableCell>
@@ -779,18 +786,12 @@ onUnmounted(() => {
             <Button
               variant="outline"
               size="sm"
-              @click="() => {
-                const selectedIds = Object.keys(rowSelection).filter(id => rowSelection[id])
-                if (confirm(`确定要删除选中的 ${selectedIds.length} 个条目吗？`)) {
-                  selectedIds.forEach(id => handleDelete({ id }))
-                  rowSelection = {}
-                }
-              }"
+              @click="handleDeleteSelected"
             >
 
               删除选中
             </Button>
-            <Button variant="outline" size="sm" @click="rowSelection = {}">
+            <Button variant="outline" size="sm" @click="clearSelection">
               取消选择
             </Button>
           </div>

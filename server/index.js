@@ -23,7 +23,13 @@ function getDataDir() {
   if (process.env.HUBBLE_PAD_DATA_DIR) {
     return path.resolve(process.env.HUBBLE_PAD_DATA_DIR);
   }
-  // 默认路径：~/.local/.hubble-pad
+  // 默认路径：优先使用当前工作目录下的 data 目录，如果没有则使用 ~/.local/.hubble-pad
+  const currentWorkingDir = process.cwd();
+  const currentDirData = path.resolve(currentWorkingDir, 'data');
+  if (fs.existsSync(currentDirData)) {
+    return currentDirData;
+  }
+  // 如果当前工作目录没有 data 目录，则使用 ~/.local/.hubble-pad
   const homeDir = os.homedir();
   return path.join(homeDir, '.local', '.hubble-pad');
 }
@@ -207,7 +213,7 @@ function ensureDataDir() {
 ensureDataDir();
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '8000', 10);
+const PORT = parseInt(process.env.PORT || '10002', 10);
 
 // 解析 JSON 请求体
 app.use(express.json({ limit: '10mb' }));
@@ -497,7 +503,7 @@ app.get('/__data/notify', (req, res) => {
 });
 
 // API: 更新 notify（支持新增和清理）
-// body: { action: 'add' | 'clearByWorkitem' | 'clearAll' | 'removeById', item?, workitemId?, id? }
+// body: { action: 'add' | 'clearByWorkitem' | 'clearAll' | 'removeById' | 'removeByIds', item?, workitemId?, id?, ids? }
 app.post('/__data/notify', (req, res) => {
   try {
     const body = req.body || {};
@@ -538,6 +544,13 @@ app.post('/__data/notify', (req, res) => {
         throw new Error('id is required');
       }
       items = items.filter((it) => !it || it.id !== id);
+    } else if (action === 'removeByIds') {
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+      if (ids.length === 0) {
+        throw new Error('ids array is required and cannot be empty');
+      }
+      const idSet = new Set(ids.filter((id) => typeof id === 'string' && id.trim()));
+      items = items.filter((it) => !it || !idSet.has(it.id));
     } else {
       throw new Error('invalid action');
     }
@@ -704,14 +717,54 @@ async function executeHook(hook, hookIndex) {
       let parsed;
       try {
         const out = String(stdout || '').trim();
-        const match = out.match(/\{[\s\S]*\}$/);
-        parsed = JSON.parse(match ? match[0] : out);
+        if (!out || out.trim() === '') {
+          return resolve({
+            ok: false,
+            error: 'Hook 未输出有效的 JSON 结果',
+            stderr: stderr || '脚本执行完成但无输出',
+          });
+        }
+        // 优先查找 response= 格式的输出
+        let jsonStr = '';
+        const responseMatch = out.match(/response\s*=\s*(\{[\s\S]*\})/i);
+        if (responseMatch && responseMatch[1]) {
+          jsonStr = responseMatch[1];
+        } else {
+          // 如果没有找到 response= 格式，回退到原来的解析方式
+          // 查找最后一个完整的 JSON 对象
+          const jsonMatch = out.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}$/s);
+          if (jsonMatch) {
+            jsonStr = jsonMatch[0];
+          } else {
+            // 如果正则匹配失败，尝试简单的匹配
+            const simpleMatch = out.match(/\{[\s\S]*\}$/);
+            jsonStr = simpleMatch ? simpleMatch[0] : out;
+          }
+          // 如果还是找不到，尝试直接解析整个输出
+          if (!jsonStr || jsonStr.trim() === '') {
+            jsonStr = out;
+          }
+        }
+        parsed = JSON.parse(jsonStr);
       } catch (e) {
-        return resolve({ ok: true, items: [] });
+        return resolve({
+          ok: false,
+          error: `JSON 解析失败: ${e instanceof Error ? e.message : String(e)}`,
+          stderr: stderr || `stdout: ${String(stdout || '').slice(0, 200)}`,
+        });
       }
 
       const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
       const items = Array.isArray(parsed?.items) ? parsed.items : [];
+
+      // 如果 parsed 中有 error 字段，使用它作为错误信息
+      if (!ok && parsed && typeof parsed.error === 'string') {
+        return resolve({
+          ok: false,
+          error: parsed.error,
+          stderr: stderr || '',
+        });
+      }
 
       // 如果是更新信息类任务，合并到 workitems.json
       if (ok && items.length > 0 && hook.type === 'update') {
@@ -940,11 +993,50 @@ app.get('*', (req, res) => {
   }
 });
 
+// 写入服务状态信息到 status.json
+function writeStatusFile() {
+  try {
+    const statusFile = path.join(dataDir, 'status.json');
+    const networkInterfaces = os.networkInterfaces();
+    const addresses = [];
+
+    // 收集所有 IPv4 地址
+    for (const interfaceName of Object.keys(networkInterfaces)) {
+      const interfaces = networkInterfaces[interfaceName];
+      if (interfaces) {
+        for (const iface of interfaces) {
+          if (iface.family === 'IPv4' && !iface.internal) {
+            addresses.push(iface.address);
+          }
+        }
+      }
+    }
+
+    const status = {
+      server: {
+        ip: addresses.length > 0 ? addresses[0] : '127.0.0.1',
+        port: PORT,
+        url: `http://${addresses.length > 0 ? addresses[0] : '127.0.0.1'}:${PORT}`,
+        localUrl: `http://127.0.0.1:${PORT}`,
+      },
+      dataDir: dataDir,
+      startedAt: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(statusFile, JSON.stringify(status, null, 2) + '\n', 'utf-8');
+  } catch (error) {
+    // 忽略写入错误，不影响服务启动
+    console.warn('Failed to write status.json:', error.message);
+  }
+}
+
 // 启动服务器
 app.listen(PORT, () => {
   console.log(`Hubble Pad server is running at http://localhost:${PORT}`);
   console.log(`Serving static files from: ${distDir}`);
   console.log(`Data directory: ${dataDir}`);
+  // 写入状态文件
+  writeStatusFile();
   // 启动定时任务调度
   startScheduledTasks();
   watchHooksFile();

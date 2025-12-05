@@ -6,6 +6,7 @@ import IconsResolver from 'unplugin-icons/resolver'
 import { fileURLToPath, URL } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { spawn } from 'node:child_process'
 
 export default defineConfig({
@@ -30,11 +31,22 @@ export default defineConfig({
       name: 'data-dev-map',
       configureServer(server) {
         // 开发环境的数据根目录：
-        // 优先使用环境变量 HUBBLE_PAD_DATA_DIR，其次使用仓库内的 data 目录
+        // 优先使用环境变量 HUBBLE_PAD_DATA_DIR，其次使用当前工作目录下的 data 目录，最后使用 ~/.local/.hubble-pad
         const envDataDir = process.env.HUBBLE_PAD_DATA_DIR
-        const dataDir = envDataDir && envDataDir.trim()
-          ? path.resolve(envDataDir)
-          : path.resolve(__dirname, '../data')
+        let dataDir: string
+        if (envDataDir && envDataDir.trim()) {
+          dataDir = path.resolve(envDataDir)
+        } else {
+          // 优先使用当前工作目录下的 data 目录
+          const currentWorkingDir = process.cwd()
+          const currentDirData = path.resolve(currentWorkingDir, 'data')
+          if (fs.existsSync(currentDirData)) {
+            dataDir = currentDirData
+          } else {
+            // 如果当前工作目录没有 data 目录，则使用 ~/.local/.hubble-pad
+            dataDir = path.join(os.homedir(), '.local', '.hubble-pad')
+          }
+        }
         const logDir = path.join(dataDir, 'logs')
         const logFile = path.join(logDir, 'dev.log')
         const repoRoot = path.resolve(__dirname, '..')
@@ -89,6 +101,46 @@ export default defineConfig({
           }
           next()
         })
+
+        // 写入服务状态信息到 status.json
+        function writeStatusFile() {
+          try {
+            const statusFile = path.join(dataDir, 'status.json')
+            const networkInterfaces = os.networkInterfaces()
+            const addresses: string[] = []
+
+            // 收集所有 IPv4 地址
+            for (const interfaceName of Object.keys(networkInterfaces)) {
+              const interfaces = networkInterfaces[interfaceName]
+              if (interfaces) {
+                for (const iface of interfaces) {
+                  if (iface.family === 'IPv4' && !iface.internal) {
+                    addresses.push(iface.address)
+                  }
+                }
+              }
+            }
+
+            const status = {
+              server: {
+                ip: addresses.length > 0 ? addresses[0] : '127.0.0.1',
+                port: 10002,
+                url: `http://${addresses.length > 0 ? addresses[0] : '127.0.0.1'}:10002`,
+                localUrl: 'http://127.0.0.1:10002',
+              },
+              dataDir: dataDir,
+              startedAt: new Date().toISOString(),
+            }
+
+            fs.writeFileSync(statusFile, JSON.stringify(status, null, 2) + '\n', 'utf-8')
+          } catch (error) {
+            // 忽略写入错误，不影响服务启动
+            console.warn('Failed to write status.json:', (error as Error).message)
+          }
+        }
+
+        // 在服务器配置完成后写入状态文件
+        writeStatusFile()
 
         // dev only save endpoint
         server.middlewares.use('/__data/save', async (req, res, next) => {
@@ -513,6 +565,11 @@ export default defineConfig({
                 const id = typeof body.id === 'string' ? body.id : ''
                 if (!id) throw new Error('id is required')
                 items = items.filter((it: any) => !it || it.id !== id)
+              } else if (action === 'removeByIds') {
+                const ids = Array.isArray(body.ids) ? body.ids : []
+                if (ids.length === 0) throw new Error('ids array is required and cannot be empty')
+                const idSet = new Set(ids.filter((id: any) => typeof id === 'string' && id.trim()))
+                items = items.filter((it: any) => !it || !idSet.has(it.id))
               } else {
                 throw new Error('invalid action')
               }
@@ -576,16 +633,42 @@ export default defineConfig({
           let parsed: any
           try {
             const out = done.trim()
-            const match = out.match(/\{[\s\S]*\}$/)
-            parsed = JSON.parse(match ? match[0] : out)
+            if (!out || out.trim() === '') {
+              appendLog({ level: 'error', message: 'hooks.exec.no_output', index, stderr: stderr ? stderr.slice(0, 500) : null })
+              return { ok: false, items: [], error: 'Hook 未输出有效的 JSON 结果', stderr: stderr ? stderr.slice(0, 1000) : '脚本执行完成但无输出' }
+            }
+            // 优先查找 response= 格式的输出
+            let jsonStr = ''
+            const responseMatch = out.match(/response\s*=\s*(\{[\s\S]*\})/i)
+            if (responseMatch && responseMatch[1]) {
+              jsonStr = responseMatch[1]
+            } else {
+              // 如果没有找到 response= 格式，回退到原来的解析方式
+              // 查找最后一个完整的 JSON 对象
+              const jsonMatch = out.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}$/s)
+              if (jsonMatch) {
+                jsonStr = jsonMatch[0]
+              } else {
+                // 如果正则匹配失败，尝试简单的匹配
+                const simpleMatch = out.match(/\{[\s\S]*\}$/)
+                jsonStr = simpleMatch ? simpleMatch[0] : out
+              }
+              // 如果还是找不到，尝试直接解析整个输出
+              if (!jsonStr || jsonStr.trim() === '') {
+                jsonStr = out
+              }
+            }
+            parsed = JSON.parse(jsonStr)
             appendLog({ level: 'info', message: 'hooks.exec.parsed', index, ok: parsed?.ok ?? parsed?.status, items: Array.isArray(parsed?.items) ? parsed.items.length : 0 })
           } catch (e) {
-            appendLog({ level: 'error', message: 'hooks.exec.parse_failed', index, stderr: stderr ? stderr.slice(0, 500) : null })
-            throw new Error('Invalid JSON output from hook: ' + index + (stderr ? ('; stderr: ' + stderr.slice(0, 500)) : ''))
+            appendLog({ level: 'error', message: 'hooks.exec.parse_failed', index, stderr: stderr ? stderr.slice(0, 500) : null, error: (e as Error).message })
+            return { ok: false, items: [], error: `JSON 解析失败: ${(e as Error).message}`, stderr: stderr ? stderr.slice(0, 1000) : `stdout: ${done.slice(0, 200)}` }
           }
           const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'))
           const items: any[] = Array.isArray(parsed?.items) ? parsed.items : []
-          return { ok, items, error: ok ? null : (parsed?.error || 'Hook failed'), stderr: stderr ? stderr.slice(0, 500) : null }
+          // 如果 parsed 中有 error 字段，使用它作为错误信息
+          const errorMsg = ok ? null : (parsed?.error || 'Hook failed')
+          return { ok, items, error: errorMsg, stderr: stderr ? stderr.slice(0, 1000) : null }
         }
 
         function validateWorkitemMinimal(it: any): boolean {
@@ -639,11 +722,12 @@ export default defineConfig({
             const nowISO = new Date().toISOString()
             const r = await execHookByIndex(index)
             if (!r.ok) {
-              updateHookStatus(index, nowISO, false, r.error || r.stderr || 'Hook failed')
+              const errorMsg = r.error || r.stderr || 'Hook failed'
+              updateHookStatus(index, nowISO, false, errorMsg)
               res.statusCode = 500
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ ok: false, message: r.error || r.stderr || 'Hook failed' }))
-              appendLog({ level: 'error', message: 'hooks.run_one.failed', index, error: r.error || r.stderr || 'Hook failed' })
+              res.end(JSON.stringify({ ok: false, message: errorMsg, stderr: r.stderr ? r.stderr.slice(0, 2000) : null }))
+              appendLog({ level: 'error', message: 'hooks.run_one.failed', index, error: errorMsg, stderr: r.stderr ? r.stderr.slice(0, 500) : null })
               return
             }
             const filtered = (Array.isArray(r.items) ? r.items : []).filter((x) => validateWorkitemMinimal(x))
