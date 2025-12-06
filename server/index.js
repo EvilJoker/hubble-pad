@@ -843,6 +843,7 @@ function startScheduledTasks() {
         // 支持格式：
         // - 0 */N * * * (每 N 小时)
         // - */N * * * * (每 N 分钟)
+        // - 0 H * * D (每周 D 天 H 点，D=0-6，0=周日，1=周一)
         const hourCronMatch = schedule.match(/^0\s+\*\/(\d+)\s+\*\s+\*\s+\*$/); // 0 */N * * *
         if (hourCronMatch) {
           const hours = parseInt(hourCronMatch[1], 10);
@@ -855,6 +856,41 @@ function startScheduledTasks() {
             const minutes = parseInt(minuteCronMatch[1], 10);
             if (minutes > 0) {
               intervalMs = minutes * 60 * 1000;
+            }
+          } else {
+            // 支持每周特定时间：0 H * * D (每周 D 天 H 点)
+            // 例如：0 9 * * 1 表示每周一早上 9 点
+            const weeklyCronMatch = schedule.match(/^0\s+(\d+)\s+\*\s+\*\s+(\d+)$/); // 0 H * * D
+            if (weeklyCronMatch) {
+              const hour = parseInt(weeklyCronMatch[1], 10);
+              const dayOfWeek = parseInt(weeklyCronMatch[2], 10);
+              if (hour >= 0 && hour < 24 && dayOfWeek >= 0 && dayOfWeek <= 6) {
+                // 计算到下一个执行时间的毫秒数
+                const now = new Date();
+                const currentDay = now.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+                const currentHour = now.getHours();
+
+                // cron 格式：0=Sunday, 1=Monday, ..., 6=Saturday
+                // JavaScript Date.getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
+                // 所以 dayOfWeek 可以直接使用
+
+                let daysUntilNext = dayOfWeek - currentDay;
+                if (daysUntilNext < 0) {
+                  daysUntilNext += 7; // 下周
+                } else if (daysUntilNext === 0 && currentHour >= hour) {
+                  daysUntilNext = 7; // 今天已经过了，下周
+                }
+
+                const nextRun = new Date(now);
+                nextRun.setDate(now.getDate() + daysUntilNext);
+                nextRun.setHours(hour, 0, 0, 0);
+
+                intervalMs = nextRun.getTime() - now.getTime();
+                // 如果计算出的时间小于 0 或大于 7 天，设置为 7 天后
+                if (intervalMs < 0 || intervalMs > 7 * 24 * 60 * 60 * 1000) {
+                  intervalMs = 7 * 24 * 60 * 60 * 1000;
+                }
+              }
             }
           }
         }

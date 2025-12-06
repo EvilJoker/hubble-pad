@@ -69,6 +69,13 @@ async function clearAll() {
     await postNotify({ action: 'clearAll' })
     allItems.value = []
     selectedIds.value = {}
+    // 等待一小段时间确保服务器文件写入完成
+    await new Promise(resolve => setTimeout(resolve, 150))
+    // 通知侧边栏更新提醒数量
+    if (import.meta.env.DEV) {
+      console.log('[NotifyPage] 触发 notify-updated 事件 (clearAll)')
+    }
+    window.dispatchEvent(new CustomEvent('notify-updated'))
   } catch (e) {
     alert('清空失败：' + (e as Error).message)
   }
@@ -84,6 +91,13 @@ async function clearSelected() {
     selectedIds.value = {}
     // 重新加载数据以确保同步
     await loadNotify()
+    // 等待一小段时间确保服务器文件写入完成
+    await new Promise(resolve => setTimeout(resolve, 150))
+    // 通知侧边栏更新提醒数量
+    if (import.meta.env.DEV) {
+      console.log('[NotifyPage] 触发 notify-updated 事件 (clearSelected)')
+    }
+    window.dispatchEvent(new CustomEvent('notify-updated'))
   } catch (e) {
     alert('删除失败：' + (e as Error).message)
   }

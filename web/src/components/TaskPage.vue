@@ -355,6 +355,8 @@ async function handleRunHookByName(name: string | undefined) {
       if (count > 0) {
         console.log(`任务 "${name}" 执行成功，处理了 ${count} 项`)
       }
+      // 通知侧边栏更新提醒数量（任务可能生成了新的提醒）
+      window.dispatchEvent(new CustomEvent('notify-updated'))
     }
 
     await loadHooks()

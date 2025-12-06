@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   Sidebar,
@@ -28,6 +28,9 @@ defineOptions({
 // WorkItems 目录路径
 const dataDir = ref<string>('')
 
+// 提醒数量
+const notifyCount = ref<number>(0)
+
 // 加载配置
 async function loadConfig() {
   try {
@@ -41,8 +44,67 @@ async function loadConfig() {
   }
 }
 
+// 加载提醒数量
+async function loadNotifyCount() {
+  try {
+    // 添加时间戳防止缓存
+    const timestamp = Date.now()
+    const res = await fetch(`/__data/notify?t=${timestamp}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      }
+    })
+    if (res.ok) {
+      const data = await res.json()
+      const newCount = Array.isArray(data) ? data.length : 0
+      notifyCount.value = newCount
+      if (import.meta.env.DEV) {
+        console.log('[SidebarPanel] 提醒数量已更新:', newCount)
+      }
+    } else {
+      notifyCount.value = 0
+    }
+  } catch (e) {
+    // 忽略错误，使用 0
+    if (import.meta.env.DEV) {
+      console.error('[SidebarPanel] 加载提醒数量失败:', e)
+    }
+    notifyCount.value = 0
+  }
+}
+
+let notifyCountInterval: ReturnType<typeof setInterval> | null = null
+
+// 监听提醒更新事件
+function handleNotifyUpdated() {
+  if (import.meta.env.DEV) {
+    console.log('[SidebarPanel] 收到 notify-updated 事件，开始更新提醒数量')
+  }
+  // 添加小延迟确保服务器文件写入完成
+  setTimeout(() => {
+    loadNotifyCount()
+  }, 100)
+}
+
 onMounted(() => {
   loadConfig()
+  loadNotifyCount()
+  // 监听提醒更新事件
+  window.addEventListener('notify-updated', handleNotifyUpdated)
+  // 每 30 秒刷新一次提醒数量
+  notifyCountInterval = setInterval(() => {
+    loadNotifyCount()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('notify-updated', handleNotifyUpdated)
+  if (notifyCountInterval) {
+    clearInterval(notifyCountInterval)
+    notifyCountInterval = null
+  }
 })
 </script>
 
@@ -170,9 +232,10 @@ onMounted(() => {
                   <Tooltip :delayDuration="100">
                     <TooltipTrigger as-child>
                       <SidebarMenuButton as-child>
-                        <a href="#/notify" @click.prevent="emits('navigate', '/notify')" class="flex items-center gap-2 pl-3">
+                        <a href="#/notify" @click.prevent="emits('navigate', '/notify')" class="flex items-center gap-2 pl-3 w-full">
                           <icon-lucide-bell class="w-4 h-4" />
                           <span>Notify</span>
+                          <span v-if="notifyCount > 0" class="ml-auto text-xs font-semibold text-red-600">{{ notifyCount }}</span>
                         </a>
                       </SidebarMenuButton>
                     </TooltipTrigger>

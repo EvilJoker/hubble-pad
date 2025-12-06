@@ -178,6 +178,13 @@ async function clearSelectedNotifies() {
     notifyDialogSelectedIds.value = {}
     // 重新加载数据以确保同步
     await loadNotify()
+    // 等待一小段时间确保服务器文件写入完成
+    await new Promise(resolve => setTimeout(resolve, 150))
+    // 通知侧边栏更新提醒数量
+    if (import.meta.env.DEV) {
+      console.log('[DataPage] 触发 notify-updated 事件 (clearSelectedNotifies)')
+    }
+    window.dispatchEvent(new CustomEvent('notify-updated'))
     // 如果所有提醒都被删除了，关闭对话框
     if (currentNotifyList.value.length === 0) {
       notifyDialogOpen.value = false
