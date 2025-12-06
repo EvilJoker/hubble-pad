@@ -589,12 +589,12 @@ onUnmounted(() => {
         />
         <div class="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" @click="openFullEditor">
-            <icon-lucide-pencil class="w-4 h-4 mr-2" />
-            编辑数据
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="reload">
-            <icon-lucide-refresh-ccw class="w-4 h-4" />
-          </Button>
+          <icon-lucide-pencil class="w-4 h-4 mr-2" />
+          编辑数据
+        </Button>
+        <Button variant="ghost" size="icon" aria-label="刷新" title="刷新" @click="reload">
+          <icon-lucide-refresh-ccw class="w-4 h-4" />
+        </Button>
         </div>
       </div>
 

@@ -1,0 +1,6 @@
+# Python 依赖包
+# 用于支持 hook 脚本执行
+
+# HTTP 请求库（用于 RDC、Redmine 等 API 调用）
+requests>=2.31.0
+

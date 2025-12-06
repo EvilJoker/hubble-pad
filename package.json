@@ -13,6 +13,7 @@
     "README.md"
   ],
   "scripts": {
+    "start": "node server/index.js",
     "build:web": "cd web && npm run build",
     "build:copy": "rm -rf dist && cp -r web/dist dist",
     "build": "npm run build:web && npm run build:copy",

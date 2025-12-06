@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Node modules
+node_modules
+web/node_modules
+
+# 构建产物（会在构建阶段生成）
+dist
+web/dist
+
+# 数据目录（通过 volume 挂载）
+data
+data_local
+
+# 日志
+*.log
+logs
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# 文档
+docs
+README.md
+
+# 测试
+test
+tests
+*.test.js
+*.spec.js
+
+# 临时文件
+*.tmp
+.cache
+.specstory
+
+# npm
+*.tgz
+*.tar.gz
+# package-lock.json 需要包含在构建中，以便使用 npm ci
+
+# Docker（但保留 requirements.txt）
+docker/*
+!docker/requirements.txt
+
+# 其他
+.DS_Store
+Thumbs.db
+

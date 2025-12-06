@@ -29,7 +29,7 @@
     "enabled": true,
     "type": "auto",
     "schedule": null,
-    "lastRunAt": "2025-12-05T03:57:28.176Z",
-    "lastError": "无法连接到 API 服务器，请确保开发服务器正在运行（尝试了 http://127.0.0.1:10002）"
+    "lastRunAt": "2025-12-05T09:27:44.401Z",
+    "lastError": null
   }
 ]

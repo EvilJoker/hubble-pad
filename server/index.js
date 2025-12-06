@@ -692,7 +692,7 @@ async function executeHook(hook, hookIndex) {
     const cwd = hook.cwd ? path.resolve(rootDir, hook.cwd) : rootDir;
 
     exec(cmd, { cwd, timeout: 300000 }, async (error, stdout, stderr) => {
-      const nowISO = new Date().toISOString();
+          const nowISO = new Date().toISOString();
       try {
         const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
         const updatedHooks = hooks.map((x, xi) => {
@@ -713,10 +713,10 @@ async function executeHook(hook, hookIndex) {
         return resolve({ ok: false, error: error.message, stderr });
       }
 
-      // 解析 JSON
-      let parsed;
-      try {
-        const out = String(stdout || '').trim();
+          // 解析 JSON
+          let parsed;
+          try {
+            const out = String(stdout || '').trim();
         if (!out || out.trim() === '') {
           return resolve({
             ok: false,
@@ -754,8 +754,8 @@ async function executeHook(hook, hookIndex) {
         });
       }
 
-      const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
-      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+          const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
+          const items = Array.isArray(parsed?.items) ? parsed.items : [];
 
       // 如果 parsed 中有 error 字段，使用它作为错误信息
       if (!ok && parsed && typeof parsed.error === 'string') {
@@ -839,13 +839,23 @@ function startScheduledTasks() {
       if (!Number.isNaN(numSchedule) && numSchedule > 0) {
         intervalMs = numSchedule;
       } else {
-        // 简单的 cron 表达式解析（仅支持 */N 格式，如 */5 表示每 5 分钟）
-        // 对于复杂的 cron，可以后续集成 node-cron 库
-        const cronMatch = schedule.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/); // */N * * * *
-        if (cronMatch) {
-          const minutes = parseInt(cronMatch[1], 10);
-          if (minutes > 0) {
-            intervalMs = minutes * 60 * 1000;
+        // 简单的 cron 表达式解析
+        // 支持格式：
+        // - 0 */N * * * (每 N 小时)
+        // - */N * * * * (每 N 分钟)
+        const hourCronMatch = schedule.match(/^0\s+\*\/(\d+)\s+\*\s+\*\s+\*$/); // 0 */N * * *
+        if (hourCronMatch) {
+          const hours = parseInt(hourCronMatch[1], 10);
+          if (hours > 0) {
+            intervalMs = hours * 60 * 60 * 1000;
+          }
+        } else {
+          const minuteCronMatch = schedule.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/); // */N * * * *
+          if (minuteCronMatch) {
+            const minutes = parseInt(minuteCronMatch[1], 10);
+            if (minutes > 0) {
+              intervalMs = minutes * 60 * 1000;
+            }
           }
         }
       }
@@ -1031,7 +1041,7 @@ function writeStatusFile() {
 }
 
 // 启动服务器
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Hubble Pad server is running at http://localhost:${PORT}`);
   console.log(`Serving static files from: ${distDir}`);
   console.log(`Data directory: ${dataDir}`);
@@ -1041,6 +1051,24 @@ app.listen(PORT, () => {
   startScheduledTasks();
   watchHooksFile();
 });
+
+// 优雅关闭处理（容器化支持）
+function gracefulShutdown(signal) {
+  console.log(`\n收到 ${signal} 信号，正在优雅关闭服务器...`);
+  server.close(() => {
+    console.log('HTTP 服务器已关闭');
+    process.exit(0);
+  });
+
+  // 如果 10 秒后仍未关闭，强制退出
+  setTimeout(() => {
+    console.error('强制关闭服务器');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // 处理未捕获的错误
 process.on('uncaughtException', (error) => {

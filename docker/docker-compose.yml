@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  hubble-pad:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        NPM_PROXY: ${NPM_PROXY:-${http_proxy}}
+        NPM_HTTPS_PROXY: ${NPM_HTTPS_PROXY:-${https_proxy}}
+        HTTP_PROXY: ${HTTP_PROXY:-${http_proxy}}
+        HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy}}
+        http_proxy: ${http_proxy}
+        https_proxy: ${https_proxy}
+        NO_PROXY: ${NO_PROXY}
+        no_proxy: ${no_proxy}
+    container_name: hubble-pad
+    ports:
+      - "10002:10002"
+    volumes:
+      # 数据目录挂载（持久化）
+      - ../data:/app/data
+      # 本地数据目录挂载（生产环境使用）
+      - ../data_local:/app/data_local
+    environment:
+      - PORT=10002
+      - HUBBLE_PAD_DATA_DIR=${HUBBLE_PAD_DATA_DIR:-/app/data}
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:10002/api/config', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
