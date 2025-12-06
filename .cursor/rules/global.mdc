@@ -1,0 +1,257 @@
+---
+alwaysApply: true
+---
+
+# Hubble Pad 项目开发规范
+
+## 项目概述
+
+Hubble Pad 是一个工作管理工具，采用前后端分离架构：
+- **前端**: Vue 3 + TypeScript + Composition API + shadcn-vue + Tailwind CSS
+- **后端**: Node.js + Express
+- **数据存储**: JSON 文件（workitems.json, hooks.json, kind.json, notify.json）
+- **容器化**: Docker + docker-compose
+- **Hook 脚本**: 支持 Python 和 Bash
+
+## 代码风格
+
+### Vue 组件
+
+1. **使用 Composition API (`<script setup>`)**
+   - 优先使用 `<script setup lang="ts">`
+   - 使用 `ref`, `computed`, `watch`, `onMounted` 等 Composition API
+
+2. **组件导入顺序**
+   ```typescript
+   // 1. Composables
+   import { useWorkitems } from '@/composables/useWorkitems'
+   
+   // 2. UI 组件（按字母顺序）
+   import { Button } from '@/components/ui/button'
+   import { Input } from '@/components/ui/input'
+   
+   // 3. 自定义组件
+   import DataFacetedFilter from '@/components/DataFacetedFilter.vue'
+   
+   // 4. 类型定义
+   import type { WorkItem } from '@/types/workitem'
+   
+   // 5. Vue 核心
+   import { ref, computed, watch, onMounted } from 'vue'
+   ```
+
+3. **响应式数据命名**
+   - 使用 `ref` 的变量：`const keyword = ref<string>('')`
+   - 使用 `computed` 的变量：`const items = computed(() => ...)`
+   - 布尔值：`const isOpen = ref(false)`
+   - 数组：`const selectedItems = ref<string[]>([])`
+
+4. **组件命名**
+   - 页面组件：`XxxPage.vue`（如 `DataPage.vue`, `KindPage.vue`）
+   - UI 组件：PascalCase（如 `DataFacetedFilter.vue`）
+   - UI 基础组件放在 `web/src/components/ui/` 目录
+
+### TypeScript
+
+1. **类型定义**
+   - 接口使用 `interface`，类型别名使用 `type`
+   - 类型定义放在 `web/src/types/` 目录
+   - 导出类型使用 `export type` 或 `export interface`
+
+2. **类型注解**
+   - 函数参数和返回值必须标注类型
+   - 复杂对象使用接口定义
+   ```typescript
+   interface WorkItem {
+     id: string
+     title: string
+     description?: string
+     kind: string
+   }
+   ```
+
+### 文件组织
+
+1. **目录结构**
+   ```
+   web/src/
+   ├── components/        # Vue 组件
+   │   ├── ui/           # shadcn-vue UI 组件
+   │   └── *.vue         # 页面组件
+   ├── composables/       # 组合式函数
+   ├── lib/              # 工具函数
+   ├── types/            # TypeScript 类型定义
+   └── main.ts           # 入口文件
+   ```
+
+2. **文件命名**
+   - Vue 组件：PascalCase（`DataPage.vue`）
+   - TypeScript 文件：camelCase（`useWorkitems.ts`）
+   - 工具函数：camelCase（`utils.ts`）
+
+### 后端代码
+
+1. **Express 路由**
+   - API 路径使用 `/api/` 前缀
+   - 数据 API 使用 `/__data/` 前缀（开发环境）
+   - RESTful 风格：GET, POST, PUT, DELETE
+
+2. **错误处理**
+   - 使用 try-catch 捕获错误
+   - 返回标准错误格式：`{ error: string, message?: string }`
+   - HTTP 状态码：200（成功）、400（客户端错误）、500（服务器错误）
+
+3. **数据目录**
+   - 使用 `getDataDir()` 函数获取数据目录
+   - 支持环境变量 `HUBBLE_PAD_DATA_DIR`
+   - 默认优先级：环境变量 > `process.cwd()/data` > `~/.local/.hubble-pad`
+
+### 样式规范
+
+1. **Tailwind CSS**
+   - 优先使用 Tailwind 工具类
+   - 自定义样式放在 `style.css` 或组件 `<style>` 中
+   - 响应式设计使用 Tailwind 断点：`sm:`, `md:`, `lg:`
+
+2. **组件样式**
+   - UI 组件使用 shadcn-vue 的样式系统
+   - 页面组件使用 Tailwind 工具类
+   - 避免内联样式，除非是动态样式
+
+## 开发规范
+
+### 组件开发
+
+1. **可复用组件**
+   - 提取可复用的逻辑到 `composables/`
+   - UI 组件放在 `components/ui/`
+   - 页面特定组件放在 `components/`
+
+2. **状态管理**
+   - 使用 `ref` 和 `computed` 管理本地状态
+   - 跨组件状态使用 composables（如 `useWorkitems`）
+   - 避免使用全局状态管理库（如 Pinia），除非必要
+
+3. **事件处理**
+   - 使用 `@click`, `@input` 等 Vue 事件
+   - 事件处理函数使用 `handle` 前缀：`handleClick`, `handleSubmit`
+
+### API 调用
+
+1. **数据获取**
+   - 使用 `fetch` API
+   - 错误处理要完善
+   - 加载状态使用 `loading` ref
+
+2. **数据格式**
+   - 请求：JSON 格式
+   - 响应：`{ ok: boolean, items?: any[], error?: string }`
+
+### Hook 脚本
+
+1. **输出格式**
+   - 必须输出 JSON 格式
+   - 支持 `response={...}` 格式
+   - 错误信息输出到 stderr
+
+2. **脚本位置**
+   - 开发环境：`data/hook/`
+   - 生产环境：`data_local/hook/`
+
+3. **脚本类型**
+   - Python 脚本：`.py`，需要 `requests` 等依赖
+   - Bash 脚本：`.sh`，需要 `curl`, `jq` 等工具
+
+## 提交规范
+
+使用 Conventional Commits 格式：
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Type 类型**：
+- `feat`: 新功能
+- `fix`: 修复 bug
+- `docs`: 文档更新
+- `style`: 代码格式（不影响功能）
+- `refactor`: 重构
+- `perf`: 性能优化
+- `test`: 测试
+- `build`: 构建系统或依赖
+- `chore`: 其他更改
+
+**示例**：
+```
+feat(容器化): 完善 Docker 容器化配置
+
+- 添加 Dockerfile 多阶段构建配置
+- 添加 docker-compose.yml 容器编排配置
+- 支持 data 和 data_local 双目录挂载
+```
+
+**注意**：提交信息中不要包含 "ITRAN" 等特定标识符。
+
+## 容器化
+
+1. **Docker 配置**
+   - Dockerfile 使用多阶段构建
+   - docker-compose.yml 支持环境变量配置
+   - 使用 `./run.sh` 和 `./stop.sh` 管理容器
+
+2. **数据目录**
+   - 开发模式：`./run.sh`（使用 `data` 目录）
+   - 生产模式：`./run.sh prod`（使用 `data_local` 目录）
+
+3. **Python 依赖**
+   - 在 `docker/requirements.txt` 中管理
+   - 构建时自动安装
+
+## 最佳实践
+
+1. **代码质量**
+   - 使用 TypeScript 严格模式
+   - 避免使用 `any` 类型
+   - 函数要有明确的类型注解
+
+2. **性能优化**
+   - 使用 `computed` 缓存计算结果
+   - 避免在模板中使用复杂计算
+   - 大列表使用虚拟滚动（如需要）
+
+3. **可访问性**
+   - 使用语义化 HTML
+   - 添加适当的 ARIA 标签
+   - 键盘导航支持
+
+4. **错误处理**
+   - 所有异步操作都要有错误处理
+   - 向用户显示友好的错误信息
+   - 记录错误日志
+
+5. **测试**
+   - 关键功能要有测试覆盖
+   - 使用描述性的测试名称
+
+## 注意事项
+
+1. **不要硬编码**
+   - 配置值使用环境变量
+   - 代理地址不要硬编码在代码中
+
+2. **数据安全**
+   - 敏感信息不要提交到版本库
+   - 使用 `.gitignore` 排除敏感文件
+
+3. **向后兼容**
+   - API 变更要考虑向后兼容
+   - 数据格式变更要有迁移方案
+
+4. **文档**
+   - 复杂逻辑要有注释
+   - API 要有文档说明
+   - 重要变更要更新 README
