@@ -743,6 +743,40 @@ export default defineConfig({
           }
         })
 
+        // 验证 cron 表达式格式（使用标准 cron-parser 库）
+        function validateSchedule(schedule: string | undefined, hookName: string): { valid: boolean; error?: string } {
+          if (!schedule || typeof schedule !== 'string') {
+            return { valid: true } // schedule 是可选的
+          }
+
+          const trimmed = schedule.trim()
+          if (!trimmed) {
+            return { valid: true } // 空字符串视为无定时
+          }
+
+          // 尝试解析为数字（毫秒间隔）
+          const numSchedule = Number(trimmed)
+          if (!Number.isNaN(numSchedule) && numSchedule > 0) {
+            return { valid: true }
+          }
+
+          // 使用标准 cron-parser 验证 cron 表达式
+          try {
+            const { CronExpressionParser } = require('cron-parser')
+            CronExpressionParser.parse(trimmed)
+            return { valid: true }
+          } catch (e: any) {
+            return {
+              valid: false,
+              error: `任务 "${hookName}" 的定时设置格式错误：${e.message}\n` +
+                `支持的格式：\n` +
+                `- 数字（毫秒间隔，如 60000）\n` +
+                `- 标准 cron 表达式（5 字段：分钟 小时 日 月 星期，如 "*/5 * * * *" 表示每 5 分钟）\n` +
+                `当前值: "${trimmed}"`
+            }
+          }
+        }
+
         // save hooks.json
         server.middlewares.use('/__hooks/save', async (req, res, next) => {
           if (req.method !== 'POST') return next()
@@ -762,6 +796,15 @@ export default defineConfig({
               if (typeof (h as any).name !== 'string') throw new Error('hook.name must be string')
               if (typeof (h as any).cmd !== 'string') throw new Error('hook.cmd must be string')
               if (typeof (h as any).enabled !== 'boolean') throw new Error('hook.enabled must be boolean')
+
+              // 验证 schedule 格式
+              if ((h as any).schedule) {
+                const hookName = (h as any).name || '未知任务'
+                const validation = validateSchedule((h as any).schedule, hookName)
+                if (!validation.valid) {
+                  throw new Error(validation.error)
+                }
+              }
             }
             fs.writeFileSync(hooksFile, JSON.stringify(json, null, 2) + '\n', 'utf-8')
             res.statusCode = 200

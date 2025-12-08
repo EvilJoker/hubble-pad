@@ -5,6 +5,7 @@ const os = require('os');
 const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
+const { CronExpressionParser } = require('cron-parser');
 
 // 获取服务器所在目录的绝对路径
 const serverDir = __dirname;
@@ -610,6 +611,39 @@ app.post('/__data/kinds', (req, res) => {
   }
 });
 
+// 验证 cron 表达式格式（使用标准 cron-parser 库）
+function validateSchedule(schedule, hookName) {
+  if (!schedule || typeof schedule !== 'string') {
+    return { valid: true }; // schedule 是可选的
+  }
+
+  const trimmed = schedule.trim();
+  if (!trimmed) {
+    return { valid: true }; // 空字符串视为无定时
+  }
+
+  // 尝试解析为数字（毫秒间隔）
+  const numSchedule = Number(trimmed);
+  if (!Number.isNaN(numSchedule) && numSchedule > 0) {
+    return { valid: true };
+  }
+
+  // 使用标准 cron-parser 验证 cron 表达式
+  try {
+    CronExpressionParser.parse(trimmed);
+    return { valid: true };
+  } catch (e) {
+    return {
+      valid: false,
+      error: `任务 "${hookName}" 的定时设置格式错误：${e.message}\n` +
+        `支持的格式：\n` +
+        `- 数字（毫秒间隔，如 60000）\n` +
+        `- 标准 cron 表达式（5 字段：分钟 小时 日 月 星期，如 "*/5 * * * *" 表示每 5 分钟）\n` +
+        `当前值: "${trimmed}"`
+    };
+  }
+}
+
 app.post('/__hooks/save', (req, res) => {
   try {
     const body = req.body;
@@ -623,6 +657,17 @@ app.post('/__hooks/save', (req, res) => {
 
     if (!Array.isArray(json)) {
       throw new Error('hooks must be an array');
+    }
+
+    // 验证每个 hook 的 schedule 格式
+    for (const hook of json) {
+      if (hook && hook.schedule) {
+        const hookName = hook.name || '未知任务';
+        const validation = validateSchedule(hook.schedule, hookName);
+        if (!validation.valid) {
+          throw new Error(validation.error);
+        }
+      }
     }
 
     const target = path.join(dataDir, 'hooks.json');
@@ -683,8 +728,38 @@ app.post('/__hooks/run/:name', async (req, res) => {
 // 定时任务调度器
 const scheduledTasks = new Map(); // 存储定时任务 ID
 
+// 写入日志到 dev.log
+function writeLogToFile(level, message, data) {
+  try {
+    const logDir = path.join(dataDir, 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, 'dev.log');
+    const entry = {
+      time: new Date().toISOString(),
+      level,
+      message,
+      ...(data && typeof data === 'object' ? data : {}),
+    };
+    fs.appendFileSync(logFile, JSON.stringify(entry) + '\n', 'utf-8');
+  } catch (e) {
+    // 忽略日志写入错误
+  }
+}
+
 // 执行单个 hook（内部函数，供定时任务和手动触发使用）
 async function executeHook(hook, hookIndex) {
+  const hookName = (hook && hook.name) || `hook-${hookIndex}`;
+  const startTime = Date.now();
+
+  // 记录任务开始
+  writeLogToFile('info', 'hook.execute.start', {
+    hook: hookName,
+    cmd: hook.cmd,
+    cwd: hook.cwd || './',
+  });
+
   return new Promise((resolve) => {
     const hooksFile = path.join(dataDir, 'hooks.json');
     const { exec } = require('child_process');
@@ -693,6 +768,7 @@ async function executeHook(hook, hookIndex) {
 
     exec(cmd, { cwd, timeout: 300000 }, async (error, stdout, stderr) => {
           const nowISO = new Date().toISOString();
+          const duration = Date.now() - startTime;
       try {
         const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
         const updatedHooks = hooks.map((x, xi) => {
@@ -701,7 +777,7 @@ async function executeHook(hook, hookIndex) {
           return isTarget ? {
             ...x,
             lastRunAt: nowISO,
-            lastError: error ? (stderr || error?.message) : null,
+            lastError: error ? (stderr || (error && error.message)) : null,
           } : x;
         });
         fs.writeFileSync(hooksFile, JSON.stringify(updatedHooks, null, 2) + '\n', 'utf-8');
@@ -710,6 +786,13 @@ async function executeHook(hook, hookIndex) {
       }
 
       if (error) {
+        // 记录任务失败
+        writeLogToFile('error', 'hook.execute.error', {
+          hook: hookName,
+          error: error.message,
+          stderr: stderr ? String(stderr).slice(0, 500) : undefined,
+          duration,
+        });
         return resolve({ ok: false, error: error.message, stderr });
       }
 
@@ -718,9 +801,16 @@ async function executeHook(hook, hookIndex) {
           try {
             const out = String(stdout || '').trim();
         if (!out || out.trim() === '') {
+          const errorMsg = 'Hook 未输出有效的 JSON 结果';
+          writeLogToFile('error', 'hook.execute.error', {
+            hook: hookName,
+            error: errorMsg,
+            stderr: stderr || '脚本执行完成但无输出',
+            duration,
+          });
           return resolve({
             ok: false,
-            error: 'Hook 未输出有效的 JSON 结果',
+            error: errorMsg,
             stderr: stderr || '脚本执行完成但无输出',
           });
         }
@@ -747,18 +837,31 @@ async function executeHook(hook, hookIndex) {
         }
         parsed = JSON.parse(jsonStr);
       } catch (e) {
+        const errorMsg = `JSON 解析失败: ${e instanceof Error ? e.message : String(e)}`;
+        writeLogToFile('error', 'hook.execute.error', {
+          hook: hookName,
+          error: errorMsg,
+          stderr: stderr || `stdout: ${String(stdout || '').slice(0, 200)}`,
+          duration,
+        });
         return resolve({
           ok: false,
-          error: `JSON 解析失败: ${e instanceof Error ? e.message : String(e)}`,
+          error: errorMsg,
           stderr: stderr || `stdout: ${String(stdout || '').slice(0, 200)}`,
         });
       }
 
           const ok = !!(parsed && (parsed.ok === true || parsed.status === 'success'));
-          const items = Array.isArray(parsed?.items) ? parsed.items : [];
+          const items = Array.isArray(parsed && parsed.items) ? parsed.items : [];
 
       // 如果 parsed 中有 error 字段，使用它作为错误信息
       if (!ok && parsed && typeof parsed.error === 'string') {
+        writeLogToFile('error', 'hook.execute.error', {
+          hook: hookName,
+          error: parsed.error,
+          stderr: stderr || '',
+          duration,
+        });
         return resolve({
           ok: false,
           error: parsed.error,
@@ -782,7 +885,7 @@ async function executeHook(hook, hookIndex) {
               const next = Object.assign({}, it);
               next.id = normalizeWorkitemId(
                 it,
-                `hook:${hook?.name || hookIndex}:${String(it.id || '')}:${String(it.url || '')}`,
+                `hook:${(hook && hook.name) || hookIndex}:${String(it.id || '')}:${String(it.url || '')}`,
               );
               return next;
             });
@@ -791,7 +894,7 @@ async function executeHook(hook, hookIndex) {
             const existing = map.get(it.id);
             const next = {
               ...it,
-              source: `hook:${hook?.name || hookIndex}`,
+              source: `hook:${(hook && hook.name) || hookIndex}`,
               updatedAt: nowISO,
               ...(existing && existing.storage ? { storage: existing.storage } : {}),
             };
@@ -805,6 +908,14 @@ async function executeHook(hook, hookIndex) {
           // 合并失败不影响任务执行结果
         }
       }
+
+      // 记录任务成功
+      writeLogToFile('info', 'hook.execute.success', {
+        hook: hookName,
+        ok,
+        itemsCount: items.length,
+        duration,
+      });
 
       resolve({ ok, items });
     });
@@ -820,8 +931,11 @@ function startScheduledTasks() {
     const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf-8'));
     if (!Array.isArray(hooks)) return;
 
-    // 清除所有现有定时任务
-    scheduledTasks.forEach((taskId) => clearInterval(taskId));
+    // 清除所有现有定时任务（包括 setInterval 和 setTimeout）
+    scheduledTasks.forEach((taskId) => {
+      clearInterval(taskId);
+      clearTimeout(taskId);
+    });
     scheduledTasks.clear();
 
     // 为每个启用的任务设置定时
@@ -831,81 +945,82 @@ function startScheduledTasks() {
       const schedule = hook.schedule.trim();
       if (!schedule) return;
 
-      // 解析定时设置：支持毫秒间隔或 cron 表达式
+      // 解析定时设置：支持毫秒间隔或标准 cron 表达式
       let intervalMs = null;
+      let isCronExpression = false;
 
       // 尝试解析为数字（毫秒间隔）
       const numSchedule = Number(schedule);
       if (!Number.isNaN(numSchedule) && numSchedule > 0) {
         intervalMs = numSchedule;
       } else {
-        // 简单的 cron 表达式解析
-        // 支持格式：
-        // - 0 */N * * * (每 N 小时)
-        // - */N * * * * (每 N 分钟)
-        // - 0 H * * D (每周 D 天 H 点，D=0-6，0=周日，1=周一)
-        const hourCronMatch = schedule.match(/^0\s+\*\/(\d+)\s+\*\s+\*\s+\*$/); // 0 */N * * *
-        if (hourCronMatch) {
-          const hours = parseInt(hourCronMatch[1], 10);
-          if (hours > 0) {
-            intervalMs = hours * 60 * 60 * 1000;
+        // 使用标准 cron-parser 解析 cron 表达式
+        try {
+          const interval = CronExpressionParser.parse(schedule);
+          const now = new Date();
+          const nextRun = interval.next().toDate();
+          intervalMs = nextRun.getTime() - now.getTime();
+          isCronExpression = true;
+
+          // 如果计算出的时间小于 0，说明已经过了，获取下一个
+          if (intervalMs < 0) {
+            const nextNextRun = interval.next().toDate();
+            intervalMs = nextNextRun.getTime() - now.getTime();
           }
-        } else {
-          const minuteCronMatch = schedule.match(/^\*\/(\d+)\s+\*\s+\*\s+\*\s+\*$/); // */N * * * *
-          if (minuteCronMatch) {
-            const minutes = parseInt(minuteCronMatch[1], 10);
-            if (minutes > 0) {
-              intervalMs = minutes * 60 * 1000;
-            }
-          } else {
-            // 支持每周特定时间：0 H * * D (每周 D 天 H 点)
-            // 例如：0 9 * * 1 表示每周一早上 9 点
-            const weeklyCronMatch = schedule.match(/^0\s+(\d+)\s+\*\s+\*\s+(\d+)$/); // 0 H * * D
-            if (weeklyCronMatch) {
-              const hour = parseInt(weeklyCronMatch[1], 10);
-              const dayOfWeek = parseInt(weeklyCronMatch[2], 10);
-              if (hour >= 0 && hour < 24 && dayOfWeek >= 0 && dayOfWeek <= 6) {
-                // 计算到下一个执行时间的毫秒数
-                const now = new Date();
-                const currentDay = now.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
-                const currentHour = now.getHours();
-
-                // cron 格式：0=Sunday, 1=Monday, ..., 6=Saturday
-                // JavaScript Date.getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
-                // 所以 dayOfWeek 可以直接使用
-
-                let daysUntilNext = dayOfWeek - currentDay;
-                if (daysUntilNext < 0) {
-                  daysUntilNext += 7; // 下周
-                } else if (daysUntilNext === 0 && currentHour >= hour) {
-                  daysUntilNext = 7; // 今天已经过了，下周
-                }
-
-                const nextRun = new Date(now);
-                nextRun.setDate(now.getDate() + daysUntilNext);
-                nextRun.setHours(hour, 0, 0, 0);
-
-                intervalMs = nextRun.getTime() - now.getTime();
-                // 如果计算出的时间小于 0 或大于 7 天，设置为 7 天后
-                if (intervalMs < 0 || intervalMs > 7 * 24 * 60 * 60 * 1000) {
-                  intervalMs = 7 * 24 * 60 * 60 * 1000;
-                }
-              }
-            }
-          }
+        } catch (e) {
+          console.error(`[scheduled task] Invalid cron expression for hook "${hook.name}": ${schedule}`, e);
+          // 跳过无效的 cron 表达式
+          return;
         }
       }
 
       if (intervalMs && intervalMs > 0) {
-        const taskId = setInterval(async () => {
-          try {
-            await executeHook(hook, index);
-          } catch (e) {
-            console.error(`[scheduled task] Error executing hook ${hook.name}:`, e);
-          }
-        }, intervalMs);
-        scheduledTasks.set(`${hook.name}-${index}`, taskId);
-        console.log(`[scheduled task] Started task "${hook.name}" with interval ${intervalMs}ms`);
+        if (isCronExpression) {
+          // Cron 表达式任务使用递归 setTimeout，每次执行后重新计算下一次执行时间
+          const scheduleCronTask = async () => {
+            try {
+              await executeHook(hook, index);
+            } catch (e) {
+              console.error(`[scheduled task] Error executing hook ${hook.name}:`, e);
+            }
+
+            // 重新计算下一次执行时间
+            try {
+              const interval = CronExpressionParser.parse(schedule);
+              const now = new Date();
+              const nextRun = interval.next().toDate();
+              let nextIntervalMs = nextRun.getTime() - now.getTime();
+
+              // 如果计算出的时间小于 0，说明已经过了，获取下一个
+              if (nextIntervalMs < 0) {
+                const nextNextRun = interval.next().toDate();
+                nextIntervalMs = nextNextRun.getTime() - now.getTime();
+              }
+
+              // 设置下一次执行
+              const timeoutId = setTimeout(scheduleCronTask, nextIntervalMs);
+              scheduledTasks.set(`${hook.name}-${index}`, timeoutId);
+            } catch (e) {
+              console.error(`[scheduled task] Error parsing cron expression for hook "${hook.name}": ${schedule}`, e);
+            }
+          };
+
+          // 启动第一次执行
+          const timeoutId = setTimeout(scheduleCronTask, intervalMs);
+          scheduledTasks.set(`${hook.name}-${index}`, timeoutId);
+          console.log(`[scheduled task] Started cron task "${hook.name}" with schedule "${schedule}", next run in ${intervalMs}ms`);
+        } else {
+          // 固定间隔任务使用 setInterval
+          const taskId = setInterval(async () => {
+            try {
+              await executeHook(hook, index);
+            } catch (e) {
+              console.error(`[scheduled task] Error executing hook ${hook.name}:`, e);
+            }
+          }, intervalMs);
+          scheduledTasks.set(`${hook.name}-${index}`, taskId);
+          console.log(`[scheduled task] Started task "${hook.name}" with interval ${intervalMs}ms`);
+        }
       }
     });
   } catch (e) {
