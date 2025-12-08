@@ -240,7 +240,11 @@ async function saveNewTask() {
         lastError: null,
       },
     ]
-    await fetch('/__hooks/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+    const res = await fetch('/__hooks/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+    const result = await res.json()
+    if (!res.ok || !result.ok) {
+      throw new Error(result.message || '保存失败')
+    }
     addTaskDialogOpen.value = false
     await loadHooks()
   } catch (e) {
@@ -285,7 +289,11 @@ async function saveEditTask() {
       }
       return h
     })
-    await fetch('/__hooks/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+    const res = await fetch('/__hooks/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+    const result = await res.json()
+    if (!res.ok || !result.ok) {
+      throw new Error(result.message || '保存失败')
+    }
     editTaskDialogOpen.value = false
     editingTaskName.value = null
     await loadHooks()
@@ -699,7 +707,7 @@ function getTypeColor(type?: string): string {
           </div>
           <div>
             <label class="text-sm font-medium mb-1 block">定时设置（可选）</label>
-            <Input :model-value="newTask.schedule || ''" @update:model-value="(val) => { const str = typeof val === 'string' ? val : (val != null ? String(val) : ''); newTask.schedule = str || null; }" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
+            <Input :model-value="newTask.schedule || ''" @update:model-value="(val) => { const str = typeof val === 'string' ? val.trim() : (val != null ? String(val).trim() : ''); newTask.schedule = str || undefined; }" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
             <p class="text-xs text-muted-foreground mt-1">
               支持 cron 表达式（如 "*/5 * * * *" 表示每 5 分钟）或毫秒间隔（如 "300000" 表示 5 分钟）
             </p>
@@ -757,7 +765,7 @@ function getTypeColor(type?: string): string {
           </div>
           <div>
             <label class="text-sm font-medium mb-1 block">定时设置（可选）</label>
-            <Input :model-value="editTask.schedule || ''" @update:model-value="(val) => { const str = typeof val === 'string' ? val : (val != null ? String(val) : ''); editTask.schedule = str || null; }" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
+            <Input :model-value="editTask.schedule || ''" @update:model-value="(val) => { const str = typeof val === 'string' ? val.trim() : (val != null ? String(val).trim() : ''); editTask.schedule = str || undefined; }" placeholder="例如：*/5 * * * * (cron) 或 300000 (毫秒间隔)" />
             <p class="text-xs text-muted-foreground mt-1">
               支持 cron 表达式（如 "*/5 * * * *" 表示每 5 分钟）或毫秒间隔（如 "300000" 表示 5 分钟）
             </p>
