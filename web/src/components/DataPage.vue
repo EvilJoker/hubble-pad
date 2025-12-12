@@ -26,8 +26,9 @@ const selectedKindFilters = ref<string[]>([])
 
 // 计算每个类型的数量（基于应用关键词搜索后的数据，但不包括类型筛选）
 const kindOptions = computed(() => {
-  // 先应用关键词搜索（但不应用类型筛选）
-  let filtered = [...allItems.value]
+  // 先过滤掉封存状态的工作项
+  let filtered = [...allItems.value].filter((it) => !it.archive)
+  // 再应用关键词搜索（但不应用类型筛选）
   const k = keyword.value.trim().toLowerCase()
   if (k) {
     filtered = filtered.filter((it) =>
@@ -198,6 +199,9 @@ async function clearSelectedNotifies() {
 // 排序后的列表（收藏始终排在前面）
 const items = computed(() => {
   let result = [...allItems.value]
+
+  // 默认过滤掉封存状态的工作项
+  result = result.filter((it) => !it.archive)
 
   // 应用类型筛选（多选）
   if (selectedKindFilters.value.length > 0) {
@@ -559,6 +563,34 @@ async function toggleFavorite(item: WorkItem) {
   }
 }
 
+const togglingArchives = ref<Set<string>>(new Set())
+
+async function toggleArchive(item: WorkItem) {
+  if (togglingArchives.value.has(item.id)) return
+  togglingArchives.value.add(item.id)
+
+  const currentArchive = item.archive === true
+  const newArchive = !currentArchive
+
+  try {
+    const res = await fetch(`/__data/toggle-archive/${encodeURIComponent(item.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archive: newArchive })
+    })
+    if (res.ok) {
+      window.dispatchEvent(new CustomEvent('workitems-updated'))
+    } else {
+      const errorData = await res.json().catch(() => ({ message: `HTTP ${res.status}` }))
+      console.error('Failed to toggle archive:', errorData.message || 'Unknown error')
+    }
+  } catch (error) {
+    console.error('Failed to toggle archive:', error)
+  } finally {
+    togglingArchives.value.delete(item.id)
+  }
+}
+
 // 事件监听器模式：监听全局的 workitems 更新事件
 function handleWorkitemsUpdated() {
   reload()
@@ -752,6 +784,10 @@ onUnmounted(() => {
                       <DropdownMenuItem @click="() => handleEdit(it)">
                         <icon-lucide-pencil class="mr-2 h-4 w-4" />
                         编辑
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click="() => toggleArchive(it)" :disabled="togglingArchives.has(it.id)">
+                        <icon-lucide-archive class="mr-2 h-4 w-4" />
+                        {{ it.archive ? '取消封存' : '封存' }}
                       </DropdownMenuItem>
                       <DropdownMenuItem>
                         <a

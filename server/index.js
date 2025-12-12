@@ -284,10 +284,18 @@ app.post('/__data/save', (req, res) => {
         it,
         `manual:${String(it.id || '')}:${String(it.title || '')}:${String(it.url || '')}`,
       );
-      // 保留现有的 storage 字段（本地信息）
+      // 保留现有的本地字段：storage, favorite, archive
       const existing = map.get(next.id);
-      if (existing && existing.storage) {
-        next.storage = existing.storage;
+      if (existing) {
+        if (existing.storage) {
+          next.storage = existing.storage;
+        }
+        if (existing.favorite !== undefined) {
+          next.favorite = existing.favorite;
+        }
+        if (existing.archive !== undefined) {
+          next.archive = existing.archive;
+        }
       }
       normalized.push(next);
     }
@@ -331,6 +339,50 @@ app.post('/__data/toggle-favorite/:id', (req, res) => {
       item.favorite = true;
     } else {
       delete item.favorite;
+    }
+
+    // 原子写入：先写到临时文件，再重命名，避免并发写入导致数据丢失
+    const tmpFile = target + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmpFile, target);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// API: 切换 workitem 的封存状态
+app.post('/__data/toggle-archive/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { archive } = req.body;
+
+    if (typeof archive !== 'boolean') {
+      return res.status(400).json({ ok: false, message: 'archive must be boolean' });
+    }
+
+    const target = path.join(dataDir, 'workitems.json');
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ ok: false, message: 'workitems.json not found' });
+    }
+
+    const content = fs.readFileSync(target, 'utf-8');
+    const workitems = JSON.parse(content);
+
+    if (!Array.isArray(workitems)) {
+      return res.status(400).json({ ok: false, message: 'workitems must be an array' });
+    }
+
+    const item = workitems.find(it => it && it.id === id);
+    if (!item) {
+      return res.status(404).json({ ok: false, message: `WorkItem with id "${id}" not found` });
+    }
+
+    // 更新封存状态
+    if (archive) {
+      item.archive = true;
+    } else {
+      delete item.archive;
     }
 
     // 原子写入：先写到临时文件，再重命名，避免并发写入导致数据丢失
@@ -896,7 +948,10 @@ async function executeHook(hook, hookIndex) {
               ...it,
               source: `hook:${(hook && hook.name) || hookIndex}`,
               updatedAt: nowISO,
+              // 保留本地字段：storage, favorite, archive
               ...(existing && existing.storage ? { storage: existing.storage } : {}),
+              ...(existing && existing.favorite !== undefined ? { favorite: existing.favorite } : {}),
+              ...(existing && existing.archive !== undefined ? { archive: existing.archive } : {}),
             };
             map.set(next.id, next);
           }

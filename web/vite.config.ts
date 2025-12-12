@@ -177,6 +177,86 @@ export default defineConfig({
           }
         })
 
+        // dev only toggle archive endpoint
+        server.middlewares.use('/__data/toggle-archive', async (req, res, next) => {
+          if (req.method !== 'POST') return next()
+          try {
+            const url = req.url || ''
+            const id = decodeURIComponent(url.replace(/^\//, ''))
+            if (!id) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'id is required' }))
+              return
+            }
+
+            const chunks: Buffer[] = []
+            req.on('data', (chunk) => chunks.push(chunk))
+            req.on('end', () => {
+              try {
+                const body = JSON.parse(Buffer.concat(chunks).toString('utf-8'))
+                const { archive } = body
+
+                if (typeof archive !== 'boolean') {
+                  res.statusCode = 400
+                  res.setHeader('Content-Type', 'application/json')
+                  res.end(JSON.stringify({ ok: false, message: 'archive must be boolean' }))
+                  return
+                }
+
+                const target = path.join(dataDir, 'workitems.json')
+                if (!fs.existsSync(target)) {
+                  res.statusCode = 404
+                  res.setHeader('Content-Type', 'application/json')
+                  res.end(JSON.stringify({ ok: false, message: 'workitems.json not found' }))
+                  return
+                }
+
+                const content = fs.readFileSync(target, 'utf-8')
+                const workitems = JSON.parse(content)
+
+                if (!Array.isArray(workitems)) {
+                  res.statusCode = 400
+                  res.setHeader('Content-Type', 'application/json')
+                  res.end(JSON.stringify({ ok: false, message: 'workitems must be an array' }))
+                  return
+                }
+
+                const item = workitems.find((it: any) => it && it.id === id)
+                if (!item) {
+                  res.statusCode = 404
+                  res.setHeader('Content-Type', 'application/json')
+                  res.end(JSON.stringify({ ok: false, message: `WorkItem with id "${id}" not found` }))
+                  return
+                }
+
+                // 更新封存状态
+                if (archive) {
+                  item.archive = true
+                } else {
+                  delete item.archive
+                }
+
+                // 原子写入：先写到临时文件，再重命名，避免并发写入导致数据丢失
+                const tmpFile = target + '.tmp'
+                fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8')
+                fs.renameSync(tmpFile, target)
+                res.statusCode = 200
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ ok: true }))
+              } catch (e) {
+                res.statusCode = 500
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+              }
+            })
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+          }
+        })
+
         // dev only toggle favorite endpoint
         // Note: mount without trailing slash so both '/__data/toggle-favorite' and '/__data/toggle-favorite/:id' work
         server.middlewares.use('/__data/toggle-favorite', async (req, res, next) => {
@@ -690,7 +770,16 @@ export default defineConfig({
           const beforeCount = current.length
           for (const it of items) {
             if (!validateWorkitemMinimal(it)) continue
-            const next = { ...it, source: `hook:${hook?.name || index}`, updatedAt: nowISO }
+            const existing = map.get(it.id)
+            const next = {
+              ...it,
+              source: `hook:${hook?.name || index}`,
+              updatedAt: nowISO,
+              // 保留本地字段：storage, favorite, archive
+              ...(existing && existing.storage ? { storage: existing.storage } : {}),
+              ...(existing && existing.favorite !== undefined ? { favorite: existing.favorite } : {}),
+              ...(existing && existing.archive !== undefined ? { archive: existing.archive } : {}),
+            }
             if (map.has(it.id)) updated++; else added++
             map.set(it.id, next)
           }
