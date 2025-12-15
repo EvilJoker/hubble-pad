@@ -472,6 +472,102 @@ export default defineConfig({
           }
         })
 
+        // dev only update-record endpoint
+        server.middlewares.use('/__data/update-record', async (req, res, next) => {
+          if (req.method !== 'POST') return next()
+          try {
+            const url = req.url || ''
+            const id = decodeURIComponent(url.replace(/^\//, ''))
+            if (!id) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'id is required' }))
+              return
+            }
+
+            const chunks: Buffer[] = []
+            await new Promise<void>((resolve, reject) => {
+              req.on('data', (c) => chunks.push(Buffer.from(c)))
+              req.on('end', () => resolve())
+              req.on('error', (e) => reject(e))
+            })
+            const raw = Buffer.concat(chunks).toString('utf-8')
+            const body = JSON.parse(raw || '{}')
+            const { index, record } = body as any
+
+            if (typeof index !== 'number' || index < 0) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'index must be a non-negative number' }))
+              return
+            }
+
+            if (!record || typeof record !== 'object') {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'record must be an object' }))
+              return
+            }
+
+            const target = path.join(dataDir, 'workitems.json')
+            if (!fs.existsSync(target)) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems.json not found' }))
+              return
+            }
+
+            const content = fs.readFileSync(target, 'utf-8')
+            const workitems = JSON.parse(content || '[]')
+            if (!Array.isArray(workitems)) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: 'workitems must be an array' }))
+              return
+            }
+
+            const item = workitems.find((it: any) => it && it.id === id)
+            if (!item) {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: `WorkItem with id "${id}" not found` }))
+              return
+            }
+
+            // 确保 storage.records 存在
+            if (!item.storage) item.storage = {}
+            if (!Array.isArray(item.storage.records)) item.storage.records = []
+
+            // 检查索引是否有效
+            if (index >= item.storage.records.length) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: false, message: `Index ${index} is out of range` }))
+              return
+            }
+
+            // 更新记录，保留原有的 createdAt
+            const existingRecord = item.storage.records[index]
+            item.storage.records[index] = {
+              ...existingRecord,
+              ...record,
+              createdAt: existingRecord.createdAt || record.createdAt || new Date().toISOString(),
+            }
+
+            const tmpFile = target + '.tmp'
+            fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8')
+            fs.renameSync(tmpFile, target)
+
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true, record: item.storage.records[index] }))
+          } catch (e) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: false, message: (e as Error).message }))
+          }
+        })
+
         // unified log endpoint
         server.middlewares.use('/__log', async (req, res, next) => {
           if (req.method !== 'POST') return next()

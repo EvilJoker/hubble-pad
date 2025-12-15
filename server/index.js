@@ -450,6 +450,69 @@ app.post('/__data/add-record/:id', (req, res) => {
   }
 });
 
+// API: 更新 workitem 的变更记录
+app.post('/__data/update-record/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { index, record } = req.body;
+
+    if (typeof index !== 'number' || index < 0) {
+      return res.status(400).json({ ok: false, message: 'index must be a non-negative number' });
+    }
+
+    if (!record || typeof record !== 'object') {
+      return res.status(400).json({ ok: false, message: 'record must be an object' });
+    }
+
+    const target = path.join(dataDir, 'workitems.json');
+    if (!fs.existsSync(target)) {
+      return res.status(404).json({ ok: false, message: 'workitems.json not found' });
+    }
+
+    const content = fs.readFileSync(target, 'utf-8');
+    const workitems = JSON.parse(content);
+
+    if (!Array.isArray(workitems)) {
+      return res.status(400).json({ ok: false, message: 'workitems must be an array' });
+    }
+
+    const item = workitems.find(it => it && it.id === id);
+    if (!item) {
+      return res.status(404).json({ ok: false, message: `WorkItem with id "${id}" not found` });
+    }
+
+    // 确保 storage 对象存在
+    if (!item.storage) {
+      item.storage = {};
+    }
+    // 确保 records 数组存在
+    if (!Array.isArray(item.storage.records)) {
+      item.storage.records = [];
+    }
+
+    // 检查索引是否有效
+    if (index >= item.storage.records.length) {
+      return res.status(400).json({ ok: false, message: `Index ${index} is out of range` });
+    }
+
+    // 更新记录，保留原有的 createdAt
+    const existingRecord = item.storage.records[index];
+    item.storage.records[index] = {
+      ...existingRecord,
+      ...record,
+      createdAt: existingRecord.createdAt || record.createdAt || new Date().toISOString(),
+    };
+
+    // 原子写入：先写到临时文件，再重命名，避免并发写入导致数据丢失
+    const tmpFile = target + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(workitems, null, 2) + '\n', 'utf-8');
+    fs.renameSync(tmpFile, target);
+    res.json({ ok: true, record: item.storage.records[index] });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // API: 删除指定 workitem（按 id）
 app.post('/__data/delete/:id', (req, res) => {
   try {
@@ -1011,8 +1074,8 @@ function startScheduledTasks() {
       } else {
         // 使用标准 cron-parser 解析 cron 表达式
         try {
-          const interval = CronExpressionParser.parse(schedule);
           const now = new Date();
+          const interval = CronExpressionParser.parse(schedule, { currentDate: now });
           const nextRun = interval.next().toDate();
           intervalMs = nextRun.getTime() - now.getTime();
           isCronExpression = true;
@@ -1041,8 +1104,8 @@ function startScheduledTasks() {
 
             // 重新计算下一次执行时间
             try {
-              const interval = CronExpressionParser.parse(schedule);
               const now = new Date();
+              const interval = CronExpressionParser.parse(schedule, { currentDate: now });
               const nextRun = interval.next().toDate();
               let nextIntervalMs = nextRun.getTime() - now.getTime();
 
@@ -1055,6 +1118,8 @@ function startScheduledTasks() {
               // 设置下一次执行
               const timeoutId = setTimeout(scheduleCronTask, nextIntervalMs);
               scheduledTasks.set(`${hook.name}-${index}`, timeoutId);
+              const nextRunDate = new Date(Date.now() + nextIntervalMs);
+              console.log(`[scheduled task] Scheduled next run for "${hook.name}" at ${nextRunDate.toISOString()} (in ${Math.round(nextIntervalMs / 1000 / 60)} minutes)`);
             } catch (e) {
               console.error(`[scheduled task] Error parsing cron expression for hook "${hook.name}": ${schedule}`, e);
             }
@@ -1063,7 +1128,8 @@ function startScheduledTasks() {
           // 启动第一次执行
           const timeoutId = setTimeout(scheduleCronTask, intervalMs);
           scheduledTasks.set(`${hook.name}-${index}`, timeoutId);
-          console.log(`[scheduled task] Started cron task "${hook.name}" with schedule "${schedule}", next run in ${intervalMs}ms`);
+          const nextRunDate = new Date(Date.now() + intervalMs);
+          console.log(`[scheduled task] Started cron task "${hook.name}" with schedule "${schedule}", next run at ${nextRunDate.toISOString()} (in ${Math.round(intervalMs / 1000 / 60)} minutes)`);
         } else {
           // 固定间隔任务使用 setInterval
           const taskId = setInterval(async () => {

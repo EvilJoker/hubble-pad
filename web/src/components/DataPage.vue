@@ -20,14 +20,15 @@ type DataSortOrder = 'asc' | 'desc' | null
 
 const dataSortKey = ref<DataSortKey>(null)
 const dataSortOrder = ref<DataSortOrder>(null)
+const showArchived = ref(false)
 
 // 类型筛选（多选）
 const selectedKindFilters = ref<string[]>([])
 
 // 计算每个类型的数量（基于应用关键词搜索后的数据，但不包括类型筛选）
 const kindOptions = computed(() => {
-  // 先过滤掉封存状态的工作项
-  let filtered = [...allItems.value].filter((it) => !it.archive)
+  // 默认过滤封存，除非开启“显示封存”
+  let filtered = showArchived.value ? [...allItems.value] : [...allItems.value].filter((it) => !it.archive)
   // 再应用关键词搜索（但不应用类型筛选）
   const k = keyword.value.trim().toLowerCase()
   if (k) {
@@ -200,8 +201,10 @@ async function clearSelectedNotifies() {
 const items = computed(() => {
   let result = [...allItems.value]
 
-  // 默认过滤掉封存状态的工作项
-  result = result.filter((it) => !it.archive)
+  // 默认过滤掉封存状态的工作项；支持切换查看封存项以便取消封存
+  if (!showArchived.value) {
+    result = result.filter((it) => !it.archive)
+  }
 
   // 应用类型筛选（多选）
   if (selectedKindFilters.value.length > 0) {
@@ -311,6 +314,14 @@ const recordItemId = ref<string | null>(null)
 const recordItemTitle = ref('')
 const recordError = ref<string | null>(null)
 const addingRecord = ref(false)
+
+// 进展查看/编辑对话框状态
+const progressDialogOpen = ref(false)
+const progressItemId = ref<string | null>(null)
+const progressItemTitle = ref('')
+const progressRecords = ref<Array<{ content: string; type?: string; createdAt?: string }>>([])
+const editingRecordIndex = ref<number | null>(null)
+const editingRecordContent = ref('')
 
 // 收藏状态管理
 const favoriteStates = ref<Map<string, boolean>>(new Map())
@@ -456,6 +467,121 @@ function handleAddRecord(item: { id: string; title?: string }) {
   recordDialogOpen.value = true
 }
 
+function openProgressDialog(item: WorkItem) {
+  progressItemId.value = item.id
+  progressItemTitle.value = item.title || item.id || ''
+  // 倒序显示，最新的在最上面
+  const records = item.storage?.records || []
+  progressRecords.value = [...records].reverse()
+  editingRecordIndex.value = null
+  editingRecordContent.value = ''
+  progressDialogOpen.value = true
+}
+
+function closeProgressDialog() {
+  progressDialogOpen.value = false
+  progressItemId.value = null
+  progressItemTitle.value = ''
+  progressRecords.value = []
+  editingRecordIndex.value = null
+  editingRecordContent.value = ''
+}
+
+function startEditRecord(index: number) {
+  editingRecordIndex.value = index
+  editingRecordContent.value = progressRecords.value[index]?.content || ''
+}
+
+function cancelEditRecord() {
+  editingRecordIndex.value = null
+  editingRecordContent.value = ''
+}
+
+async function saveEditedRecord() {
+  if (editingRecordIndex.value === null || !progressItemId.value) return
+
+  const value = editingRecordContent.value.trim()
+  if (value.length < 20) {
+    alert('格式错误：内容总长度不少于 20 个字符。')
+    return
+  }
+  if (value.length > 500) {
+    alert('格式错误：内容总长度不能超过 500 个字符。')
+    return
+  }
+  if (!isValidDatePrefix(value)) {
+    alert('格式错误：内容必须以有效的 8 位日期（YYYYMMDD）开头。')
+    return
+  }
+
+  try {
+    // 将显示索引转换为原始索引（因为显示是倒序的）
+    const originalIndex = progressRecords.value.length - 1 - editingRecordIndex.value
+
+    // 保存到服务器
+    const res = await fetch(`/__data/update-record/${encodeURIComponent(progressItemId.value)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        index: originalIndex,
+        record: {
+          content: value,
+        },
+      }),
+    })
+    const data = await res.json().catch(() => ({ ok: false }))
+    if (!res.ok || !data.ok) {
+      const msg = (data && (data as any).message) ? (data as any).message : `HTTP ${res.status}`
+      alert('更新记录失败：' + msg)
+      // 重新加载数据
+      await reload()
+      if (progressItemId.value) {
+        const item = allItems.value.find((it) => it.id === progressItemId.value)
+        if (item) {
+          // 倒序显示，最新的在最上面
+          const records = item.storage?.records || []
+          progressRecords.value = [...records].reverse()
+        }
+      }
+      return
+    }
+
+    // 刷新数据
+    await reload()
+    if (progressItemId.value) {
+      const item = allItems.value.find((it) => it.id === progressItemId.value)
+      if (item) {
+        // 倒序显示，最新的在最上面
+        const records = item.storage?.records || []
+        progressRecords.value = [...records].reverse()
+      }
+    }
+    editingRecordIndex.value = null
+    editingRecordContent.value = ''
+    window.dispatchEvent(new CustomEvent('workitems-updated'))
+  } catch (e) {
+    alert('更新记录失败：' + (e as Error).message)
+  }
+}
+
+function getProgressSummary(item: WorkItem): string {
+  const records = item.storage?.records || []
+  if (records.length === 0) return '-'
+  const latest = records[records.length - 1]
+  if (!latest) return '-'
+  const content = latest.content || ''
+  // 显示日期和部分内容
+  if (content.length > 0) {
+    const datePart = content.substring(0, 8)
+    const rest = content.substring(8).trim()
+    if (rest.length > 0) {
+      return `${datePart} ${rest.substring(0, 20)}${rest.length > 20 ? '...' : ''}`
+    }
+    return datePart
+  }
+  return `${records.length} 条记录`
+}
+
 // 工具函数：生成当前日期的 YYYYMMDD 格式
 function getCurrentDatePrefix(): string {
   const now = new Date()
@@ -565,6 +691,10 @@ async function toggleFavorite(item: WorkItem) {
 
 const togglingArchives = ref<Set<string>>(new Set())
 
+function handleShowArchivedChange(checked: boolean) {
+  showArchived.value = checked
+}
+
 async function toggleArchive(item: WorkItem) {
   if (togglingArchives.value.has(item.id)) return
   togglingArchives.value.add(item.id)
@@ -626,6 +756,10 @@ onUnmounted(() => {
           :options="kindOptions"
           v-model="selectedKindFilters"
         />
+        <label class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox :checked="showArchived" @update:checked="handleShowArchivedChange" />
+          显示封存
+        </label>
         <div class="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" @click="openFullEditor">
           <icon-lucide-pencil class="w-4 h-4 mr-2" />
@@ -714,6 +848,7 @@ onUnmounted(() => {
                     />
                   </button>
                 </TableHead>
+                <TableHead class="w-[150px]">进展</TableHead>
                 <TableHead class="w-[100px]">提醒</TableHead>
                 <TableHead class="w-[100px] text-right">操作</TableHead>
               </TableRow>
@@ -761,6 +896,16 @@ onUnmounted(() => {
                     {{ it.kind }}
                   </span>
                   <span v-else class="text-sm text-muted-foreground">-</span>
+                </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    class="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer text-left"
+                    @click="openProgressDialog(it)"
+                    :title="getProgressSummary(it)"
+                  >
+                    {{ getProgressSummary(it) }}
+                  </button>
                 </TableCell>
                 <TableCell>
                   <button
@@ -976,6 +1121,82 @@ onUnmounted(() => {
               关闭
             </Button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 进展查看/编辑对话框 -->
+    <div
+      v-if="progressDialogOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      @click.self="closeProgressDialog"
+    >
+      <div class="bg-background rounded-lg border shadow-lg w-full max-w-3xl p-6 max-h-[90vh] flex flex-col">
+        <div class="mb-4 flex-shrink-0">
+          <h2 class="text-lg font-semibold">进展记录 - {{ progressItemTitle }}</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            查看和编辑工作项的进展记录。共 {{ progressRecords.length }} 条记录。
+          </p>
+        </div>
+        <div class="flex-1 overflow-auto space-y-3 mb-4">
+          <div
+            v-for="(record, index) in progressRecords"
+            :key="index"
+            class="border rounded-md px-4 py-3 bg-muted/40"
+          >
+            <div v-if="editingRecordIndex !== index">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-sm font-medium">
+                  {{ record.content.substring(0, 8) }}
+                </div>
+                <div class="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-7 px-2"
+                    @click="startEditRecord(index)"
+                  >
+                    <icon-lucide-pencil class="h-3 w-3 mr-1" />
+                    编辑
+                  </Button>
+                </div>
+              </div>
+              <div class="text-sm text-muted-foreground whitespace-pre-line">
+                {{ record.content.substring(8).trim() || '-' }}
+              </div>
+              <div v-if="record.createdAt" class="text-xs text-muted-foreground mt-2">
+                {{ new Date(record.createdAt).toLocaleString() }}
+              </div>
+            </div>
+            <div v-else>
+              <Textarea
+                v-model="editingRecordContent"
+                :placeholder="getRecordPlaceholder()"
+                class="min-h-24 mb-2"
+                :maxlength="500"
+              />
+              <div class="flex justify-end gap-2">
+                <Button variant="outline" size="sm" @click="cancelEditRecord">
+                  取消
+                </Button>
+                <Button size="sm" @click="saveEditedRecord">
+                  保存
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div v-if="progressRecords.length === 0" class="text-sm text-muted-foreground text-center py-8">
+            暂无进展记录
+          </div>
+        </div>
+        <div class="flex-shrink-0 flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" @click="closeProgressDialog">
+            关闭
+          </Button>
+          <Button @click="() => { closeProgressDialog(); handleAddRecord({ id: progressItemId || '', title: progressItemTitle }); }">
+            <icon-lucide-plus class="h-4 w-4 mr-2" />
+            添加新记录
+          </Button>
         </div>
       </div>
     </div>
