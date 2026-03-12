@@ -38,3 +38,4 @@ Thumbs.db
 # 运行时状态文件
 data/status.json
 data_local/status.json
+.aider*
