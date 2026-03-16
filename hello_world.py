@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Hello World 示例程序"""
+"""Simple Hello World example."""
+
 
 def main():
     print("Hello, World!")
